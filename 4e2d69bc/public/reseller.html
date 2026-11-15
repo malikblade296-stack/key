@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Reseller console — KeyGate</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235eead4'/%3E%3Ccircle cx='25' cy='38' r='12' fill='none' stroke='%23052e2b' stroke-width='6'/%3E%3Cpath d='M34 29 52 11M44 19l6 6M38 25l6 6' stroke='%23052e2b' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/reseller.js"></script>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <header class="app-header">
+    <div class="app-header-inner">
+      <a class="brand" href="/" aria-label="KeyGate home">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        </span>
+        <span class="brand-name">KeyGate</span>
+      </a>
+      <div class="user-area">
+        <span class="balance-pill" title="Available reseller balance">
+          <span class="dot"></span>
+          <span>Balance</span>
+          <strong id="balance-amount">$—</strong>
+        </span>
+        <span class="user-chip" id="username-chip">…</span>
+        <button class="btn btn-ghost btn-sm" id="logout-btn" type="button">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow">Reseller console</p>
+        <h1>Welcome back, <span id="welcome-name">reseller</span></h1>
+        <p class="muted">Generate activation keys and track exactly how they are used.</p>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <section class="panel create-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Generate keys</h2>
+            <p>$1.00 per key, deducted from your balance.</p>
+          </div>
+        </div>
+        <div class="panel-inner">
+          <form id="create-form">
+            <div class="form-stack">
+              <label class="field">
+                <span>Duration in minutes</span>
+                <input id="duration" name="duration" type="number" min="1" max="10000000" step="1" inputmode="numeric" placeholder="Leave empty for lifetime">
+                <small class="hint">The countdown starts on first activation.</small>
+              </label>
+
+              <label class="field">
+                <span>Key prefix (optional)</span>
+                <input id="prefix" name="prefix" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="e.g. INRI">
+                <small class="hint">Up to 12 letters or numbers, added to the start of every key.</small>
+              </label>
+
+              <div class="field">
+                <span>Device policy</span>
+                <div class="segmented">
+                  <label>
+                    <input type="radio" name="device_mode" value="single" checked>
+                    <span>Single device</span>
+                    <small>Locks to first device</small>
+                  </label>
+                  <label>
+                    <input type="radio" name="device_mode" value="unlimited">
+                    <span>Unlimited</span>
+                    <small>Any device, any time</small>
+                  </label>
+                </div>
+              </div>
+
+              <label class="field">
+                <span>Quantity</span>
+                <input id="quantity" name="quantity" type="number" min="1" max="100" step="1" value="1" inputmode="numeric">
+              </label>
+
+              <div class="cost-line">
+                <span id="cost-label">$1.00 × 1</span>
+                <strong id="cost-total">$1.00</strong>
+              </div>
+
+              <button class="btn btn-primary btn-block" type="submit" id="create-btn">Generate keys</button>
+              <p class="form-error" id="create-error" role="alert"></p>
+            </div>
+          </form>
+
+          <div class="result-panel" id="result-panel" hidden>
+            <div class="result-head">
+              <h3>Keys created</h3>
+              <button class="btn btn-ghost btn-sm" type="button" id="copy-all">Copy all</button>
+            </div>
+            <textarea class="result-keys" id="result-keys" readonly rows="4" aria-label="Generated keys"></textarea>
+            <p class="muted small">Distribute these keys to your customers. They also stay visible in the table.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel table-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Your keys</h2>
+            <p id="keys-summary">Loading…</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" id="refresh-btn">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table class="reseller-table">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Status</th>
+                <th>Device</th>
+                <th>Duration</th>
+                <th>Activated</th>
+                <th>Expires</th>
+              </tr>
+            </thead>
+            <tbody id="keys-body">
+              <tr><td colspan="6" class="empty">Loading keys…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

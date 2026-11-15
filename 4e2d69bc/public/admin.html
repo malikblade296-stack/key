@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Private console — KeyGate</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235eead4'/%3E%3Ccircle cx='25' cy='38' r='12' fill='none' stroke='%23052e2b' stroke-width='6'/%3E%3Cpath d='M34 29 52 11M44 19l6 6M38 25l6 6' stroke='%23052e2b' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/admin.js"></script>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <section class="auth-shell" id="login-view">
+    <div class="auth-card admin-login">
+      <div class="brand brand-center">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        </span>
+        <span class="brand-name">KeyGate</span>
+      </div>
+      <p class="eyebrow">Restricted access</p>
+      <h1>Administrator console</h1>
+      <p class="muted">Private key control. Credentials required.</p>
+      <form id="admin-login-form" novalidate>
+        <label class="field">
+          <span>Username</span>
+          <input id="admin-username" name="username" value="INRI" autocomplete="username" required>
+        </label>
+        <label class="field">
+          <span>Password</span>
+          <input id="admin-password" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p class="form-error" id="admin-login-error" role="alert"></p>
+        <button class="btn btn-primary btn-block" type="submit" id="admin-login-btn">Unlock console</button>
+      </form>
+      <p class="muted small card-note">This URL is private. Never share or link it publicly.</p>
+    </div>
+  </section>
+
+  <div id="app-view" hidden>
+    <header class="app-header">
+      <div class="app-header-inner">
+        <div class="brand-group">
+          <a class="brand" href="/" aria-label="KeyGate home">
+            <span class="brand-mark">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            </span>
+            <span class="brand-name">KeyGate</span>
+          </a>
+          <span class="secret-chip">Private console</span>
+        </div>
+        <div class="user-area">
+          <span class="user-chip">admin</span>
+          <button class="btn btn-ghost btn-sm" id="admin-logout" type="button">Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <div class="page-head">
+        <div>
+          <p class="eyebrow">Key control</p>
+          <h1>Administration</h1>
+          <p class="muted">Create, inspect, suspend, revoke, and delete activation keys.</p>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="overview-refresh" type="button">Refresh overview</button>
+      </div>
+
+      <section class="stats-grid" aria-label="Key statistics">
+        <article class="stat"><span>Total keys</span><strong data-stat="total_keys">—</strong></article>
+        <article class="stat info"><span>Unused</span><strong data-stat="unused">—</strong></article>
+        <article class="stat ok"><span>In use</span><strong data-stat="in_use">—</strong></article>
+        <article class="stat"><span>Expired</span><strong data-stat="expired">—</strong></article>
+        <article class="stat warn"><span>Suspended</span><strong data-stat="suspended">—</strong></article>
+        <article class="stat bad"><span>Revoked</span><strong data-stat="revoked">—</strong></article>
+        <article class="stat"><span>Resellers</span><strong data-stat="resellers">—</strong></article>
+      </section>
+
+      <div class="tabs" role="tablist" aria-label="Admin sections">
+        <button class="tab" role="tab" aria-selected="true" data-tab="keys" type="button">Keys</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="resellers" type="button">Resellers</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="settings" type="button">Settings</button>
+      </div>
+
+      <section id="tab-keys" role="tabpanel">
+        <div class="workspace">
+          <section class="panel create-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Create keys</h2>
+                <p>Free for the admin account.</p>
+              </div>
+            </div>
+            <div class="panel-inner">
+              <form id="admin-create-form">
+                <div class="form-stack">
+                  <label class="field">
+                    <span>Duration in minutes</span>
+                    <input id="admin-duration" type="number" min="1" max="10000000" step="1" inputmode="numeric" placeholder="Leave empty for lifetime">
+                    <small class="hint">Timing begins when the key is first verified.</small>
+                  </label>
+                  <div class="field">
+                    <span>Device policy</span>
+                    <div class="segmented">
+                      <label>
+                        <input type="radio" name="admin_device_mode" value="single" checked>
+                        <span>Single device</span>
+                        <small>Locks to first device</small>
+                      </label>
+                      <label>
+                        <input type="radio" name="admin_device_mode" value="unlimited">
+                        <span>Unlimited</span>
+                        <small>Any device, any time</small>
+                      </label>
+                    </div>
+                  </div>
+                  <label class="field">
+                    <span>Quantity</span>
+                    <input id="admin-quantity" type="number" min="1" max="100" step="1" value="1" inputmode="numeric">
+                  </label>
+                  <button class="btn btn-primary btn-block" type="submit" id="admin-create-btn">Create keys</button>
+                  <p class="form-error" id="admin-create-error" role="alert"></p>
+                </div>
+              </form>
+
+              <div class="result-panel" id="admin-result-panel" hidden>
+                <div class="result-head">
+                  <h3>Keys created</h3>
+                  <button class="btn btn-ghost btn-sm" type="button" id="admin-copy-all">Copy all</button>
+                </div>
+                <textarea class="result-keys" id="admin-result-keys" readonly rows="4" aria-label="Generated keys"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel table-panel">
+            <div class="panel-head">
+              <div>
+                <h2>All keys</h2>
+                <p id="keys-count">Loading…</p>
+              </div>
+              <button class="btn btn-ghost btn-sm" type="button" id="refresh-keys">Refresh</button>
+            </div>
+            <div class="panel-inner panel-toolbar-wrap">
+              <div class="toolbar">
+                <input class="search" id="key-search" type="search" placeholder="Search key or HWID…" aria-label="Search keys">
+                <select id="key-status" aria-label="Filter by status">
+                  <option value="all">All statuses</option>
+                  <option value="unused">Unused</option>
+                  <option value="active">In use</option>
+                  <option value="expired">Expired</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="revoked">Revoked</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Status</th>
+                    <th>Mode</th>
+                    <th>Duration</th>
+                    <th>Device (HWID)</th>
+                    <th>Activated</th>
+                    <th>Expires</th>
+                    <th>Checks</th>
+                    <th>Origin</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-keys-body">
+                  <tr><td colspan="10" class="empty">Loading keys…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="tab-resellers" role="tabpanel" hidden>
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Create reseller</h2>
+              <p>Resellers buy keys from their balance at $1.00 each.</p>
+            </div>
+          </div>
+          <div class="panel-inner">
+            <form id="reseller-form" class="form-inline">
+              <label class="field">
+                <span>Username</span>
+                <input id="reseller-username" autocomplete="off" required>
+              </label>
+              <label class="field">
+                <span>Password</span>
+                <input id="reseller-password" type="password" autocomplete="new-password" required>
+              </label>
+              <label class="field">
+                <span>Starting balance (USD)</span>
+                <input id="reseller-balance" type="number" min="0" step="0.01" value="0">
+              </label>
+              <button class="btn btn-primary" type="submit" id="reseller-create-btn">Create reseller</button>
+            </form>
+            <p class="form-error" id="reseller-error" role="alert"></p>
+          </div>
+        </section>
+
+        <section class="panel table-panel spaced-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Reseller accounts</h2>
+              <p id="reseller-summary">Loading…</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" id="refresh-resellers">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table class="resellers-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Balance</th>
+                  <th>Keys</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="admin-resellers-body">
+                <tr><td colspan="6" class="empty">Loading resellers…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-settings" role="tabpanel" hidden>
+        <div class="settings-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Change admin password</h2>
+                <p>Use a long, unique password.</p>
+              </div>
+            </div>
+            <div class="panel-inner">
+              <form id="password-form">
+                <div class="form-stack">
+                  <label class="field">
+                    <span>Current password</span>
+                    <input id="current-password" type="password" autocomplete="current-password" required>
+                  </label>
+                  <label class="field">
+                    <span>New password</span>
+                    <input id="new-password" type="password" autocomplete="new-password" required>
+                  </label>
+                  <label class="field">
+                    <span>Confirm new password</span>
+                    <input id="confirm-password" type="password" autocomplete="new-password" required>
+                  </label>
+                  <button class="btn btn-primary" type="submit" id="password-btn">Update password</button>
+                  <p class="form-error" id="password-error" role="alert"></p>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>App integration</h2>
+                <p>Point your application at this endpoint.</p>
+              </div>
+            </div>
+            <div class="panel-inner">
+              <p class="small muted">Verification endpoint</p>
+              <div class="integration-code" id="verify-url">/api/verify</div>
+              <pre class="integration-code" id="verify-sample"></pre>
+              <p class="small muted">PHP-style endpoint (GET or form POST)</p>
+              <div class="integration-code" id="verify-php-url">/api.php</div>
+              <pre class="integration-code" id="verify-php-get"></pre>
+              <p class="small muted">A successful check returns <code>valid: true</code>. Failures return <code>valid: false</code> with a reason:</p>
+              <div class="reason-list">
+                <code>invalid_key</code>
+                <code>expired</code>
+                <code>suspended</code>
+                <code>revoked</code>
+                <code>device_required</code>
+                <code>device_mismatch</code>
+              </div>
+              <p class="small muted">PHP client (server-side only)</p>
+              <pre class="integration-code" id="verify-php"></pre>
+              <p class="small muted">Single-device keys bind to the first <code>hwid</code> they receive. Unlimited keys accept any device. A key's timer starts at its first successful verification, so unused keys never expire. Deploy behind HTTPS, set <code>COOKIE_SECURE=1</code>, and back up <code>data/keygate.db</code>.</p>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel spaced-panel">
+          <div class="panel-head">
+            <div>
+              <h2>API protection</h2>
+              <p>Restrict <code>/api/verify</code>. Modes combine, and changes apply immediately.</p>
+            </div>
+            <span class="secret-chip" id="integration-status">Loading…</span>
+          </div>
+          <div class="panel-inner">
+            <div class="settings-grid">
+              <form id="integration-form">
+                <div class="auth-option-list">
+                  <label class="auth-option">
+                    <input type="checkbox" id="require-api-key">
+                    <span class="auth-option-body">
+                      <strong>API key</strong>
+                      <small>Sent as <code>X-API-Key</code>, or <code>Authorization: Bearer</code> when Basic auth is off.</small>
+                    </span>
+                    <span class="cred-state" id="api-key-state">Not generated</span>
+                  </label>
+                  <label class="auth-option">
+                    <input type="checkbox" id="require-hmac">
+                    <span class="auth-option-body">
+                      <strong>HMAC-SHA256 signature</strong>
+                      <small>Signs <code>timestamp.nonce.body</code> with <code>X-Timestamp</code>, <code>X-Nonce</code>, <code>X-Signature</code>. ±5 minute window, nonces are single-use.</small>
+                    </span>
+                    <span class="cred-state" id="hmac-state">Not generated</span>
+                  </label>
+                  <label class="auth-option">
+                    <input type="checkbox" id="require-basic">
+                    <span class="auth-option-body">
+                      <strong>HTTP Basic</strong>
+                      <small>Standard <code>Authorization: Basic</code> credentials.</small>
+                    </span>
+                    <span class="cred-state" id="basic-state">Not set</span>
+                  </label>
+                </div>
+                <label class="field">
+                  <span>IP allowlist</span>
+                  <textarea id="allowed-ips" rows="3" placeholder="203.0.113.7&#10;198.51.100.0/24"></textarea>
+                  <small class="hint">IPs or CIDR ranges, comma or space separated. Leave empty to accept any IP. Behind a proxy, verify uses <code>X-Forwarded-For</code> only when <code>TRUST_PROXY=1</code>.</small>
+                </label>
+                <div class="form-actions">
+                  <button class="btn btn-primary" type="submit" id="integration-save-btn">Save protection</button>
+                </div>
+                <p class="form-error" id="integration-error" role="alert"></p>
+              </form>
+
+              <div class="cred-stack">
+                <div class="cred-card">
+                  <h3>API key</h3>
+                  <p class="small muted">Generating replaces the current key.</p>
+                  <button class="btn btn-ghost btn-sm" type="button" id="generate-api-key">Generate API key</button>
+                  <div class="result-panel" id="api-key-result" hidden>
+                    <div class="result-head">
+                      <h3>New API key</h3>
+                      <button class="btn btn-ghost btn-sm" type="button" id="copy-api-key" data-copy="">Copy</button>
+                    </div>
+                    <textarea class="result-keys" id="api-key-value" rows="2" readonly aria-label="Generated API key"></textarea>
+                    <p class="small muted">Copy it now. It is not shown again.</p>
+                  </div>
+                </div>
+                <div class="cred-card">
+                  <h3>HMAC secret</h3>
+                  <p class="small muted">Generating replaces the current secret.</p>
+                  <button class="btn btn-ghost btn-sm" type="button" id="generate-hmac">Generate HMAC secret</button>
+                  <div class="result-panel" id="hmac-result" hidden>
+                    <div class="result-head">
+                      <h3>New HMAC secret</h3>
+                      <button class="btn btn-ghost btn-sm" type="button" id="copy-hmac" data-copy="">Copy</button>
+                    </div>
+                    <textarea class="result-keys" id="hmac-value" rows="2" readonly aria-label="Generated HMAC secret"></textarea>
+                    <p class="small muted">Copy it now. It is not shown again.</p>
+                  </div>
+                </div>
+                <div class="cred-card">
+                  <h3>Basic credentials</h3>
+                  <form id="basic-form">
+                    <div class="form-stack">
+                      <label class="field">
+                        <span>Username</span>
+                        <input id="basic-username" autocomplete="off" placeholder="keygate-client">
+                      </label>
+                      <label class="field">
+                        <span>Password</span>
+                        <input id="basic-password" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+                      </label>
+                      <p class="form-error" id="basic-error" role="alert"></p>
+                      <button class="btn btn-ghost btn-sm" type="submit" id="basic-save-btn">Save Basic credentials</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+            <p class="small muted">Credentials are for server-side code only. Never embed them in an app you distribute, and never expose them in client-side JavaScript.</p>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
