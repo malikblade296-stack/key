@@ -76,24 +76,39 @@ def admin_username():
 
 
 def ensure_admin(conn):
-    count = conn.execute('SELECT COUNT(*) AS c FROM admins').fetchone()['c']
-    if count:
-        return None
     username = admin_username()
-    env_password = os.environ.get('ADMIN_PASSWORD')
-    password = env_password or security.generate_key()
-    if len(password) < 8:
+    env_password = os.environ.get('ADMIN_PASSWORD') or None
+    if env_password is not None and len(env_password) < 8:
         raise SystemExit('ADMIN_PASSWORD must be at least 8 characters.')
-    password_hash = security.hash_password(password)
-    conn.execute(
-        'INSERT INTO admins (username, pass_hash, created_at) VALUES (?, ?, ?)',
-        (username, password_hash, security.now_ms()),
-    )
-    return {
-        'username': username,
-        'generated_password': password if not env_password else None,
-        'used_env': bool(env_password),
-    }
+    row = conn.execute('SELECT * FROM admins ORDER BY id LIMIT 1').fetchone()
+    if row is None:
+        password = env_password or security.generate_key()
+        password_hash = security.hash_password(password)
+        conn.execute(
+            'INSERT INTO admins (username, pass_hash, created_at) VALUES (?, ?, ?)',
+            (username, password_hash, security.now_ms()),
+        )
+        return {
+            'username': username,
+            'generated_password': password if not env_password else None,
+            'used_env': bool(env_password),
+        }
+    # Environment values stay authoritative on redeploys.
+    if env_password and not security.verify_password(env_password, row['pass_hash']):
+        conn.execute(
+            'UPDATE admins SET pass_hash = ? WHERE id = ?',
+            (security.hash_password(env_password), row['id']),
+        )
+    if row['username'] != username:
+        clash = conn.execute(
+            'SELECT id FROM admins WHERE username = ? AND id <> ?',
+            (username, row['id']),
+        ).fetchone()
+        if clash is None:
+            conn.execute(
+                'UPDATE admins SET username = ? WHERE id = ?', (username, row['id'])
+            )
+    return None
 
 
 def client_ip(handler):
