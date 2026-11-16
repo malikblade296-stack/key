@@ -1,47 +1,96 @@
 import { api } from '/static/common.js';
 
-const form = document.getElementById('login-form');
-const errorEl = document.getElementById('login-error');
-const submitButton = form.querySelector('button[type="submit"]');
+const $ = (id) => document.getElementById(id);
 
-api('/api/reseller/me')
-  .then(() => {
-    window.location.replace('/reseller');
-  })
-  .catch(() => {});
+const form = $('verify-form');
+const keyInput = $('key');
+const errorEl = $('verify-error');
+const button = $('verify-btn');
+
+function setBusy(busy) {
+  button.disabled = busy;
+  button.textContent = busy ? 'Verifying…' : 'Verify & continue';
+}
+
+function showError(message) {
+  errorEl.textContent = message || '';
+}
+
+async function hasSession() {
+  try {
+    await api('/api/portal/session');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function showMaintenance(message) {
+  $('verify').hidden = true;
+  $('maintenance-card').hidden = false;
+  if (message) $('maintenance-message').textContent = message;
+  form.hidden = true;
+}
+
+async function boot() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('expired') === '1') {
+    showError('Your key expired or was revoked. Enter a new key to continue.');
+  } else if (params.get('banned') === '1') {
+    showError('This network or device has been blocked.');
+  }
+
+  if (await hasSession()) {
+    window.location.replace('/dashboard');
+    return;
+  }
+
+  fetch('/api/health')
+    .then((response) => (response.ok ? response.json() : Promise.reject(new Error('offline'))))
+    .then((health) => {
+      $('api-dot').classList.add('online');
+      $('api-status').textContent = 'Service online';
+      const maintenance = health.maintenance;
+      if (maintenance && maintenance.on && maintenance.block_resellers) {
+        showMaintenance(maintenance.message);
+      }
+    })
+    .catch(() => {
+      $('api-dot').classList.add('offline');
+      $('api-status').textContent = 'Service unreachable';
+    });
+}
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
-  errorEl.textContent = '';
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value;
-  if (!username || !password) {
-    errorEl.textContent = 'Enter your username and password.';
+  showError('');
+  const key = keyInput.value.trim();
+  if (!key) {
+    showError('Enter your license key.');
+    keyInput.focus();
     return;
   }
-  submitButton.disabled = true;
-  const label = submitButton.textContent;
-  submitButton.textContent = 'Signing in…';
+  setBusy(true);
   try {
-    await api('/api/login/reseller', {
+    const data = await api('/api/portal/verify', {
       method: 'POST',
-      body: { username, password },
+      body: { key },
     });
-    window.location.replace('/reseller');
+    if (data.valid) {
+      button.textContent = 'Verified — opening…';
+      window.location.replace('/dashboard');
+      return;
+    }
+    showError(data.message || 'This key cannot be used.');
+    setBusy(false);
   } catch (error) {
-    errorEl.textContent = error.message || 'Could not sign in.';
-    submitButton.disabled = false;
-    submitButton.textContent = label;
+    if (error.status === 503) {
+      showMaintenance(error.message);
+    } else {
+      showError(error.message || 'Could not verify this key.');
+    }
+    setBusy(false);
   }
 });
 
-fetch('/api/health')
-  .then((response) => (response.ok ? response.json() : Promise.reject(new Error('offline'))))
-  .then(() => {
-    document.getElementById('api-dot').classList.add('online');
-    document.getElementById('api-status').textContent = 'API online';
-  })
-  .catch(() => {
-    document.getElementById('api-dot').classList.add('offline');
-    document.getElementById('api-status').textContent = 'API unreachable';
-  });
+boot();

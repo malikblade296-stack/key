@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Dashboard — INRI Proxy</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235eead4'/%3E%3Cpath d='M32 8l18 7v16c0 11-7.6 19.6-18 25-10.4-5.4-18-14-18-25V15z' fill='none' stroke='%23052e2b' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+  <script type="module" src="/static/dashboard.js"></script>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+
+  <header class="app-header">
+    <div class="app-header-inner">
+      <div class="brand-group">
+        <a class="brand" href="/dashboard" aria-label="INRI Proxy dashboard">
+          <span class="brand-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9-8 11-4.6-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>
+          </span>
+          <span class="brand-name">INRI Proxy</span>
+        </a>
+      </div>
+      <div class="user-area">
+        <span class="user-chip mono" id="key-chip">…</span>
+        <button class="btn btn-ghost btn-sm" id="signout-btn" type="button">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <section class="panel dash-hero">
+      <div class="dash-hero-copy">
+        <span class="proxy-status offline" id="web-status"><span class="proxy-dot"></span>WEB OFFLINE</span>
+        <h1>INRI Proxy <span class="grad">dashboard</span></h1>
+        <p class="muted" id="status-note">Your browser is not tunnelled. Connect Happ to bring the tunnel online.</p>
+      </div>
+      <div class="dash-actions">
+        <button class="btn btn-primary" id="connect-btn" type="button">Connect to Happ</button>
+        <button class="btn btn-ghost" id="copy-sub-btn" type="button" data-copy="">Copy subscription link</button>
+      </div>
+    </section>
+
+    <div class="dash-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>License</h2>
+            <p>Activated on first verification.</p>
+          </div>
+          <span class="secret-chip mono" id="license-key">…</span>
+        </div>
+        <div class="panel-inner">
+          <dl class="detail-list">
+            <div><dt>Plan</dt><dd id="license-plan">—</dd></div>
+            <div><dt>Device</dt><dd id="license-device">—</dd></div>
+            <div><dt>Activated</dt><dd id="license-activated">—</dd></div>
+            <div><dt>Expires</dt><dd id="license-expires">—</dd></div>
+            <div><dt>Time left</dt><dd id="license-left" class="mono">—</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Device lock</h2>
+            <p id="bind-note">The device ID is sent automatically by the Happ connection.</p>
+          </div>
+        </div>
+        <div class="panel-inner">
+          <p class="device-state mono" id="device-state">—</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Happ profile</h2>
+            <p>Import this subscription once; Happ refreshes it automatically.</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="copy-url-2" type="button" data-copy="">Copy</button>
+        </div>
+        <div class="panel-inner">
+          <textarea class="result-keys mono" id="sub-url" rows="3" readonly aria-label="Happ subscription URL"></textarea>
+          <p class="small muted">If the import button does not open Happ, copy this URL and add it in Happ → Subscriptions → Add by URL.</p>
+          <details class="test-config">
+            <summary>Device config for manual import</summary>
+            <pre class="integration-code" id="test-config"></pre>
+            <button class="btn btn-ghost btn-sm" id="copy-config" type="button" data-copy="">Copy config</button>
+          </details>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Web proxy</h2>
+            <p>Local testing only.</p>
+          </div>
+          <span class="badge badge-expired" id="proxy-badge">Offline</span>
+        </div>
+        <div class="panel-inner">
+          <p class="small muted">The dashboard itself does not tunnel your browser. For a local web-proxy test, run the bundled proxy and point your browser at it:</p>
+          <pre class="integration-code" id="local-proxy-hint">python scripts/dev_proxy.py 8899</pre>
+          <p class="small muted">Then set the browser HTTP/HTTPS proxy to <code>127.0.0.1:8899</code>. Phone traffic goes through Happ.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

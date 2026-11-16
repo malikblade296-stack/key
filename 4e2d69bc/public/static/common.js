@@ -1,5 +1,3 @@
-export const PRICE_CENTS = 100;
-
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="robots" content="noindex, nofollow">
-  <title>Private console — KeyGate</title>
+  <title>Private console — INRI Proxy</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235eead4'/%3E%3Ccircle cx='25' cy='38' r='12' fill='none' stroke='%23052e2b' stroke-width='6'/%3E%3Cpath d='M34 29 52 11M44 19l6 6M38 25l6 6' stroke='%23052e2b' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
   <script type="module" src="/static/admin.js"></script>
@@ -19,7 +19,7 @@
         <span class="brand-mark">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
         </span>
-        <span class="brand-name">KeyGate</span>
+        <span class="brand-name">INRI Proxy</span>
       </div>
       <p class="eyebrow">Restricted access</p>
       <h1>Administrator console</h1>
@@ -44,11 +44,11 @@
     <header class="app-header">
       <div class="app-header-inner">
         <div class="brand-group">
-          <a class="brand" href="/" aria-label="KeyGate home">
+          <a class="brand" href="/" aria-label="INRI Proxy home">
             <span class="brand-mark">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
             </span>
-            <span class="brand-name">KeyGate</span>
+            <span class="brand-name">INRI Proxy</span>
           </a>
           <span class="secret-chip">Private console</span>
         </div>
@@ -82,6 +82,10 @@
       <div class="tabs" role="tablist" aria-label="Admin sections">
         <button class="tab" role="tab" aria-selected="true" data-tab="keys" type="button">Keys</button>
         <button class="tab" role="tab" aria-selected="false" data-tab="resellers" type="button">Resellers</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="plans" type="button">Plans</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="maintenance" type="button">Maintenance</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="access" type="button">Access</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="proxy" type="button">Proxy</button>
         <button class="tab" role="tab" aria-selected="false" data-tab="settings" type="button">Settings</button>
       </div>
 
@@ -187,11 +191,15 @@
           <div class="panel-head">
             <div>
               <h2>Create reseller</h2>
-              <p>Resellers buy keys from their balance at $1.00 each.</p>
+              <p>Resellers spend their balance on the plans you publish.</p>
             </div>
           </div>
           <div class="panel-inner">
             <form id="reseller-form" class="form-inline">
+              <label class="field">
+                <span>Name</span>
+                <input id="reseller-name" maxlength="48" autocomplete="off" placeholder="e.g. Amina K." required>
+              </label>
               <label class="field">
                 <span>Username</span>
                 <input id="reseller-username" autocomplete="off" required>
@@ -207,6 +215,7 @@
               <button class="btn btn-primary" type="submit" id="reseller-create-btn">Create reseller</button>
             </form>
             <p class="form-error" id="reseller-error" role="alert"></p>
+            <p class="small muted">The name is shown on the reseller's welcome screen and spoken aloud after sign-in. Key types are editable per reseller after creation.</p>
           </div>
         </section>
 
@@ -222,20 +231,154 @@
             <table class="resellers-table">
               <thead>
                 <tr>
-                  <th>Username</th>
+                  <th>Reseller</th>
                   <th>Balance</th>
                   <th>Keys</th>
+                  <th>Key types</th>
                   <th>Status</th>
                   <th>Created</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="admin-resellers-body">
-                <tr><td colspan="6" class="empty">Loading resellers…</td></tr>
+                <tr><td colspan="7" class="empty">Loading resellers…</td></tr>
               </tbody>
             </table>
           </div>
         </section>
+      </section>
+
+      <section id="tab-plans" role="tabpanel" hidden>
+        <div class="workspace">
+          <section class="panel create-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Plans resellers can buy</h2>
+                <p id="plan-form-title">Add a plan</p>
+              </div>
+            </div>
+            <div class="panel-inner">
+              <form id="plan-form">
+                <input type="hidden" id="plan-id" value="">
+                <div class="form-stack">
+                  <label class="field">
+                    <span>Plan name</span>
+                    <input id="plan-label" maxlength="48" autocomplete="off" placeholder="e.g. 1 day" required>
+                  </label>
+                  <label class="field">
+                    <span>Duration (days)</span>
+                    <input id="plan-duration" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1">
+                    <small class="hint">Blank means lifetime. 1 day = 1,440 minutes.</small>
+                  </label>
+                  <label class="field">
+                    <span>Price (USD)</span>
+                    <input id="plan-price" type="number" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 1.00" required>
+                    <small class="hint">Deducted from the reseller's balance for each key.</small>
+                  </label>
+                  <label class="field">
+                    <span>Device policy</span>
+                    <select id="plan-mode">
+                      <option value="unlimited">Unlimited devices</option>
+                      <option value="single">Single device</option>
+                    </select>
+                  </label>
+                  <label class="check-line">
+                    <input type="checkbox" id="plan-active" checked>
+                    <span>Available to resellers</span>
+                  </label>
+                  <button class="btn btn-primary btn-block" type="submit" id="plan-save-btn">Add plan</button>
+                  <button class="btn btn-ghost btn-block" type="button" id="plan-cancel-btn" hidden>Cancel edit</button>
+                  <p class="form-error" id="plan-error" role="alert"></p>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section class="panel table-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Plan catalogue</h2>
+                <p id="plans-count">Loading…</p>
+              </div>
+              <button class="btn btn-ghost btn-sm" type="button" id="refresh-plans">Refresh</button>
+            </div>
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr><th>Plan</th><th>Duration</th><th>Price</th><th>Mode</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="plans-body">
+                  <tr><td colspan="6" class="empty">Loading plans…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="panel-inner">
+              <p class="small muted">Resellers see enabled plans in their portal. Buying deducts the price from their balance and issues the key instantly — the timer still starts only on first activation.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="tab-maintenance" role="tabpanel" hidden>
+        <div class="settings-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Maintenance mode</h2>
+                <p id="maintenance-status">Loading…</p>
+              </div>
+            </div>
+            <div class="panel-inner">
+              <form id="maintenance-form">
+                <div class="auth-option-list">
+                  <label class="auth-option">
+                    <input type="checkbox" id="maintenance-on">
+                    <span class="auth-option-body">
+                      <strong>Maintenance ON</strong>
+                      <small>Master switch for the options below.</small>
+                    </span>
+                  </label>
+                  <label class="auth-option">
+                    <input type="checkbox" id="maintenance-pause">
+                    <span class="auth-option-body">
+                      <strong>Pause key timers</strong>
+                      <small>A key with 30 minutes left keeps those 30 minutes. The countdown continues when maintenance ends.</small>
+                    </span>
+                  </label>
+                  <label class="auth-option">
+                    <input type="checkbox" id="maintenance-block">
+                    <span class="auth-option-body">
+                      <strong>Close reseller page and activation page</strong>
+                      <small>Both pages show the maintenance message and stop accepting actions.</small>
+                    </span>
+                  </label>
+                </div>
+                <label class="field">
+                  <span>Message shown to visitors</span>
+                  <input id="maintenance-message" maxlength="160" autocomplete="off" placeholder="INRI PROXY ON MAINTENANCE — COME BACK LATER">
+                </label>
+                <button class="btn btn-primary btn-block" type="submit" id="maintenance-save">Save maintenance settings</button>
+                <p class="form-error" id="maintenance-error" role="alert"></p>
+              </form>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>How it behaves</h2>
+              </div>
+            </div>
+            <div class="panel-inner">
+              <ul class="plain-list">
+                <li><strong>Pause key timers</strong> freezes every activated key. When you turn it off, each key gets back exactly the time that passed — nothing is lost.</li>
+                <li><strong>Close reseller page and activation page</strong> shows the maintenance message instead of the login/verify forms. Existing Happ subscriptions with a paused key keep their remaining time.</li>
+                <li>The timer still starts only on a key's first successful verification; unused keys never expire.</li>
+              </ul>
+              <p class="small muted">Turn maintenance off to restore normal access. Any paused key is extended automatically at that moment.</p>
+            </div>
+          </section>
+        </div>
       </section>
 
       <section id="tab-settings" role="tabpanel" hidden>
@@ -283,6 +426,10 @@
               <p class="small muted">PHP-style endpoint (GET or form POST)</p>
               <div class="integration-code" id="verify-php-url">/api.php</div>
               <pre class="integration-code" id="verify-php-get"></pre>
+              <p class="small muted">Single-file action API for loaders that send an <code>action</code> parameter</p>
+              <div class="integration-code" id="php-action-url">/api.php?action=validate</div>
+              <pre class="integration-code" id="php-action-sample"></pre>
+              <p class="small muted"><code>validate</code>, <code>info</code>, <code>config</code> and <code>health</code> are open; <code>generate</code>, <code>reset_hwid</code> and <code>revoke</code> require the API key from API protection below. Actions answer <code>{ success, error, message, data }</code>.</p>
               <p class="small muted">A successful check returns <code>valid: true</code>. Failures return <code>valid: false</code> with a reason:</p>
               <div class="reason-list">
                 <code>invalid_key</code>
@@ -397,7 +544,173 @@
           </div>
         </section>
       </section>
+
+      <section id="tab-access" role="tabpanel" hidden>
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Access log</h2>
+              <p id="access-summary">Loading…</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" id="refresh-access">Refresh</button>
+          </div>
+          <div class="panel-inner">
+            <form id="ban-form" class="form-inline">
+              <label class="field">
+                <span>Ban type</span>
+                <select id="ban-kind">
+                  <option value="ip">IP address</option>
+                  <option value="hwid">Device ID (HWID)</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Value</span>
+                <input id="ban-value" autocomplete="off" spellcheck="false" placeholder="203.0.113.7 or device id" required>
+              </label>
+              <label class="field">
+                <span>Note (optional)</span>
+                <input id="ban-note" maxlength="140" autocomplete="off" placeholder="Reason">
+              </label>
+              <button class="btn btn-warn" type="submit" id="ban-btn">Ban</button>
+            </form>
+            <p class="form-error" id="ban-error" role="alert"></p>
+            <div class="table-wrap">
+              <table class="admin-table">
+                <thead>
+                  <tr><th>Type</th><th>Value</th><th>Note</th><th>Added</th><th></th></tr>
+                </thead>
+                <tbody id="bans-body">
+                  <tr><td colspan="5" class="empty">No bans yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel table-panel spaced-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Verification activity</h2>
+              <p>Every dashboard check and Happ refresh, with IP and device ID.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr><th>Time</th><th>Source</th><th>Key</th><th>IP</th><th>Device</th><th>Result</th></tr>
+              </thead>
+              <tbody id="access-body">
+                <tr><td colspan="6" class="empty">Loading activity…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="tab-proxy" role="tabpanel" hidden>
+        <div class="settings-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Happ proxy</h2>
+                <p>Point subscriptions at your proxy server.</p>
+              </div>
+            </div>
+            <div class="panel-inner">
+              <form id="proxy-form">
+                <div class="form-stack">
+                  <label class="field">
+                    <span>Mode</span>
+                    <select id="proxy-mode">
+                      <option value="test">Test config (local, non-functional)</option>
+                      <option value="live">Live proxy</option>
+                    </select>
+                    <small class="hint">Test mode emits a local placeholder config so you can exercise the whole flow before you own a proxy server.</small>
+                  </label>
+                  <label class="field">
+                    <span>Proxy host</span>
+                    <input id="proxy-host" autocomplete="off" spellcheck="false" placeholder="proxy.example.com">
+                  </label>
+                  <label class="field">
+                    <span>Port</span>
+                    <input id="proxy-port" type="number" min="1" max="65535" step="1" value="443" inputmode="numeric">
+                  </label>
+                  <label class="field">
+                    <span>Node UUID (VLESS)</span>
+                    <input id="proxy-uuid" autocomplete="off" spellcheck="false" placeholder="Generated per key when blank">
+                  </label>
+                  <label class="field">
+                    <span>SNI / host</span>
+                    <input id="proxy-sni" autocomplete="off" spellcheck="false" placeholder="proxy.example.com">
+                  </label>
+                  <label class="field">
+                    <span>WebSocket path</span>
+                    <input id="proxy-path" autocomplete="off" spellcheck="false" placeholder="/inri">
+                  </label>
+                  <label class="field">
+                    <span>Profile name</span>
+                    <input id="proxy-remark" maxlength="40" autocomplete="off" placeholder="INRI Proxy">
+                  </label>
+                  <label class="field">
+                    <span>Public base URL (optional)</span>
+                    <input id="proxy-base" autocomplete="off" spellcheck="false" placeholder="https://your-domain.example">
+                    <small class="hint">Used to build subscription links. Leave empty to use the current request host.</small>
+                  </label>
+                  <button class="btn btn-primary" type="submit" id="proxy-save-btn">Save proxy</button>
+                  <p class="form-error" id="proxy-error" role="alert"></p>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <h2>Test config</h2>
+                <p>One-click import for Happ.</p>
+              </div>
+              <button class="btn btn-ghost btn-sm" type="button" id="copy-proxy-test" data-copy="">Copy</button>
+            </div>
+            <div class="panel-inner">
+              <pre class="integration-code" id="proxy-test">—</pre>
+              <p class="small muted" id="proxy-hint"></p>
+              <p class="small muted">Subscriptions are served at <code>/sub/&lt;key&gt;</code>. Single-device keys use <code>?hwid=&lt;device-id&gt;</code>; expired or revoked keys make Happ's refresh fail, so the profile drops out of use until a new key is issued.</p>
+            </div>
+          </section>
+        </div>
+      </section>
     </main>
   </div>
+
+  <dialog class="modal" id="policy-dialog">
+    <form id="policy-form" class="modal-card">
+      <h2>Key types — <span id="policy-reseller">reseller</span></h2>
+      <p class="muted small">Choose which of your plans this reseller may buy. Purchases always use your plan prices.</p>
+      <div class="auth-option-list">
+        <label class="auth-option">
+          <input type="checkbox" id="policy-single">
+          <span class="auth-option-body"><strong>Single-device keys</strong><small>Lock to the first device ID.</small></span>
+        </label>
+        <label class="auth-option">
+          <input type="checkbox" id="policy-unlimited">
+          <span class="auth-option-body"><strong>Unlimited-device keys</strong><small>Any device, no HWID required.</small></span>
+        </label>
+        <label class="auth-option">
+          <input type="checkbox" id="policy-lifetime">
+          <span class="auth-option-body"><strong>Lifetime keys</strong><small>No expiry unless revoked.</small></span>
+        </label>
+      </div>
+      <label class="field">
+        <span>Allowed durations (minutes)</span>
+        <input id="policy-durations" autocomplete="off" placeholder="60, 1440, 10080">
+        <small class="hint">Comma-separated. Leave empty to allow any duration.</small>
+      </label>
+      <p class="form-error" id="policy-error" role="alert"></p>
+      <div class="form-actions">
+        <button class="btn btn-ghost" type="button" id="policy-cancel">Cancel</button>
+        <button class="btn btn-primary" type="submit" id="policy-save">Save key types</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>KeyGate — License key management</title>
-  <meta name="description" content="Private license key verification with device locking, timed access, and reseller management.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235eead4'/%3E%3Ccircle cx='25' cy='38' r='12' fill='none' stroke='%23052e2b' stroke-width='6'/%3E%3Cpath d='M34 29 52 11M44 19l6 6M38 25l6 6' stroke='%23052e2b' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+  <title>INRI Proxy — Verify your key</title>
+  <meta name="description" content="Verify your INRI Proxy key to open your proxy dashboard.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235eead4'/%3E%3Cpath d='M32 8l18 7v16c0 11-7.6 19.6-18 25-10.4-5.4-18-14-18-25V15z' fill='none' stroke='%23052e2b' stroke-width='6' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
   <script type="module" src="/static/index.js"></script>
 </head>
@@ -14,64 +14,41 @@
   <div class="bg-grid" aria-hidden="true"></div>
 
   <header class="site-header">
-    <a class="brand" href="/" aria-label="KeyGate home">
+    <a class="brand" href="/" aria-label="INRI Proxy home">
       <span class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9-8 11-4.6-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>
       </span>
-      <span class="brand-name">KeyGate</span>
+      <span class="brand-name">INRI Proxy</span>
     </a>
-    <a class="btn btn-ghost btn-sm" href="#reseller">Reseller sign in</a>
   </header>
 
   <main class="landing-main">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow"><span class="eyebrow-dot"></span> Private license infrastructure</p>
-        <h1 class="hero-title">License keys,<br><span class="grad">locked down.</span></h1>
-        <p class="lede">Issue time-limited activation keys, bind them to a single device, and cut access the moment you need to. A private control room for the app you are protecting.</p>
-
-        <ul class="feature-list">
-          <li>Single-device HWID locking</li>
-          <li>Unlimited-device keys</li>
-          <li>Minute-level key duration</li>
-          <li>Suspend and instant revoke</li>
-          <li>Reseller keys at $1.00 each</li>
-          <li>Server-side verification API</li>
-        </ul>
-
-        <div class="terminal" role="figure" aria-label="Verification API example">
-          <div class="terminal-bar"><span></span><span></span><span></span><em>verify request</em></div>
-          <pre><code><span class="c-muted">POST</span> /api/verify
-{ "key": "7K2Q-F9XM-W3D4-H8PR-6T2V", "hwid": "device-fingerprint" }
-
-<span class="c-ok">200</span> { "valid": true, "expires_at": 1790000000000 }</code></pre>
-        </div>
-      </div>
-
-      <aside class="auth-card" id="reseller">
-        <p class="eyebrow">Reseller access</p>
-        <h2>Sign in to your console</h2>
-        <p class="muted">Generate keys from your balance. Every key costs <strong class="accent">$1.00</strong>.</p>
-        <form id="login-form" novalidate>
+    <section class="plain-auth">
+      <aside class="auth-card" id="verify">
+        <p class="eyebrow">Verification</p>
+        <h2>Enter your key</h2>
+        <p class="muted">One key unlocks your dashboard. Nothing else to install.</p>
+        <form id="verify-form" novalidate>
           <label class="field">
-            <span>Username</span>
-            <input id="username" name="username" autocomplete="username" required>
+            <span>License key</span>
+            <input id="key" name="key" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" required>
           </label>
-          <label class="field">
-            <span>Password</span>
-            <input id="password" name="password" type="password" autocomplete="current-password" required>
-          </label>
-          <p class="form-error" id="login-error" role="alert"></p>
-          <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+          <p class="form-error" id="verify-error" role="alert"></p>
+          <button class="btn btn-primary btn-block" type="submit" id="verify-btn">Verify &amp; continue</button>
         </form>
-        <p class="muted small card-note">No account yet? Ask the administrator to create one and fund its balance.</p>
+      </aside>
+
+      <aside class="auth-card maintenance-card" id="maintenance-card" hidden>
+        <p class="eyebrow">Temporarily closed</p>
+        <h2 id="maintenance-message">INRI PROXY ON MAINTENANCE — COME BACK LATER</h2>
+        <p class="muted">The service is being updated. Your key and its remaining time are safe — try again later.</p>
       </aside>
     </section>
   </main>
 
   <footer class="site-footer">
-    <span>KeyGate — private license server</span>
-    <span class="status"><span class="status-dot" id="api-dot"></span><span id="api-status">Checking API…</span></span>
+    <span>INRI Proxy — private proxy access</span>
+    <span class="status"><span class="status-dot" id="api-dot"></span><span id="api-status">Checking…</span></span>
   </footer>
 </body>
 </html>

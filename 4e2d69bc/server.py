@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from keygate import api, db, security, sessions
+from keygate import api, db, maintenance, portal, security, sessions
 
 BASE_DIR = Path(__file__).resolve().parent
 PUBLIC_DIR = BASE_DIR / 'public'
@@ -29,6 +29,7 @@ ASSETS = {
     'index.js': 'text/javascript; charset=utf-8',
     'reseller.js': 'text/javascript; charset=utf-8',
     'admin.js': 'text/javascript; charset=utf-8',
+    'dashboard.js': 'text/javascript; charset=utf-8',
 }
 
 ADMIN_PATH = '/admin'
@@ -159,6 +160,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             if method == 'OPTIONS':
                 self._empty(204, cors=(path in ('/api/verify', '/api.php')), allow=True)
                 return
+            if path.startswith('/sub/'):
+                if method not in ('GET', 'HEAD'):
+                    self._text(405, 'Method not allowed.')
+                    return
+                self._handle_subscription(path, query)
+                return
             if path.startswith('/api/') or path == '/api.php':
                 self._handle_api(method, path, query)
                 return
@@ -185,6 +192,9 @@ class RequestHandler(BaseHTTPRequestHandler):
         if path in (ADMIN_PATH, ADMIN_PATH + '/'):
             self._file('admin.html', 'text/html; charset=utf-8', 'no-store', head)
             return True
+        if path in ('/dashboard', '/dashboard/'):
+            self._serve_dashboard(head)
+            return True
         if path == '/favicon.ico':
             self._empty(204)
             return True
@@ -196,6 +206,73 @@ class RequestHandler(BaseHTTPRequestHandler):
                 self._file('static/' + name, mime, 'public, max-age=300', head)
                 return True
         return False
+
+    def _serve_dashboard(self, head=False):
+        conn = None
+        allowed = False
+        try:
+            conn = db.connect()
+            token = portal.access_token_from(self)
+            access = portal.read_access(conn, token, client_ip(self))
+            allowed = access is not None
+        except Exception:
+            traceback.print_exc()
+        finally:
+            if conn is not None:
+                conn.close()
+        if not allowed:
+            self.send_response(302)
+            self._security_headers()
+            self.send_header('Location', '/')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
+        self._file('dashboard.html', 'text/html; charset=utf-8', 'no-store', head)
+
+    def _base_url(self):
+        proto = (self.headers.get('X-Forwarded-Proto') or '').split(',')[0].strip()
+        if proto not in ('http', 'https'):
+            proto = 'https' if os.environ.get('COOKIE_SECURE') == '1' else 'http'
+        host = (
+            self.headers.get('X-Forwarded-Host')
+            or self.headers.get('Host')
+            or 'localhost'
+        ).split(',')[0].strip()
+        return '{}://{}'.format(proto, host)
+
+    def _handle_subscription(self, path, query):
+        conn = None
+        try:
+            raw_key = path[len('/sub/'):].strip('/')
+            ip = client_ip(self)
+            conn = db.connect()
+            status, headers, body = portal.subscription(
+                conn, raw_key, query, ip, self.headers.get('User-Agent'), self.headers
+            )
+            self._raw(status, body, headers)
+        except Exception:
+            traceback.print_exc()
+            self._text(500, 'Internal server error.')
+        finally:
+            if conn is not None:
+                conn.close()
+
+    def _raw(self, status, text, headers):
+        body = text.encode('utf-8')
+        self.send_response(status)
+        self._security_headers()
+        for name, value in headers.items():
+            self.send_header(name, value)
+        if 'Cache-Control' not in headers:
+            self.send_header('Cache-Control', 'no-store')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        if self.command != 'HEAD':
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
     def _file(self, name, content_type, cache, head=False):
         try:
@@ -255,6 +332,8 @@ class RequestHandler(BaseHTTPRequestHandler):
                 'cookies': [],
                 'method': method,
                 'path': path,
+                'access_token': portal.access_token_from(self),
+                'base_url': self._base_url(),
             }
             self._authorize(route, ctx)
             result = route.handler(ctx)
@@ -263,6 +342,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._json(
                 err.status, {'error': err.message}, cors=cors, extra_headers=err.headers
             )
+        except portal.PortalError as err:
+            self._json(err.status, {'error': err.message}, cors=cors)
         except Exception:
             traceback.print_exc()
             self._json(500, {'error': 'Internal server error.'}, cors=cors)
@@ -354,7 +435,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not session or session['role'] != 'reseller':
                 raise api.ApiError(401, 'Reseller sign-in required.')
             reseller = ctx['conn'].execute(
-                'SELECT id, username, balance_cents, active FROM resellers WHERE id = ?',
+                'SELECT id, username, display_name, balance_cents, active, '
+                'allow_single, allow_unlimited, allow_lifetime, allowed_durations '
+                'FROM resellers WHERE id = ?',
                 (session['user_id'],),
             ).fetchone()
             if reseller is None:
@@ -363,6 +446,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not reseller['active']:
                 sessions.destroy_user(ctx['conn'], 'reseller', reseller['id'])
                 raise api.ApiError(403, 'This reseller account is disabled.')
+            if maintenance.block_resellers(ctx['conn']):
+                raise api.ApiError(403, maintenance.message(ctx['conn']))
             ctx['reseller'] = dict(reseller)
 
     def _security_headers(self):

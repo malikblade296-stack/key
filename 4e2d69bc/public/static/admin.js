@@ -18,6 +18,11 @@ const state = {
   resellers: [],
   stats: null,
   integration: null,
+  access: null,
+  proxy: null,
+  plans: [],
+  maintenance: null,
+  policyReseller: null,
   keySeq: 0,
   resellerSeq: 0,
 };
@@ -174,20 +179,33 @@ async function runKeyAction(button, action, key) {
   }
 }
 
+function policySummary(policy) {
+  if (!policy) return 'Single · Unlimited';
+  const parts = [];
+  if (policy.allow_single) parts.push('Single');
+  if (policy.allow_unlimited) parts.push('Unlimited');
+  if (policy.allow_lifetime) parts.push('Lifetime');
+  const durations = policy.allowed_durations || [];
+  if (durations.length) parts.push(`${durations.length} duration${durations.length === 1 ? '' : 's'}`);
+  return parts.length ? parts.join(' · ') : 'No keys';
+}
+
 function renderResellers() {
   const tbody = $('admin-resellers-body');
   if (!state.resellers.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty">No reseller accounts yet. Create one above.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">No reseller accounts yet. Create one above.</td></tr>';
     return;
   }
   tbody.innerHTML = state.resellers.map((reseller) => {
     const status = reseller.active
       ? '<span class="badge badge-active">Enabled</span>'
       : '<span class="badge badge-revoked">Disabled</span>';
+    const name = reseller.display_name || reseller.username;
     return `<tr>
-      <td><span class="mono">${esc(reseller.username)}</span></td>
+      <td><div class="origin"><span>${esc(name)}</span><small>@${esc(reseller.username)}</small></div></td>
       <td>${money(reseller.balance_cents)}</td>
       <td>${Number(reseller.key_count).toLocaleString()}</td>
+      <td><div class="type-cell"><span class="small">${esc(policySummary(reseller.policy))}</span><button type="button" class="btn btn-ghost btn-xs" data-action="policy" data-id="${reseller.id}">Edit</button></div></td>
       <td>${status}</td>
       <td>${fmtDateTime(reseller.created_at)}</td>
       <td>
@@ -204,6 +222,20 @@ function renderResellers() {
   }).join('');
 }
 
+function openPolicy(reseller) {
+  state.policyReseller = reseller;
+  const policy = reseller.policy || {};
+  $('policy-reseller').textContent = reseller.display_name || reseller.username;
+  $('policy-single').checked = Boolean(policy.allow_single);
+  $('policy-unlimited').checked = Boolean(policy.allow_unlimited);
+  $('policy-lifetime').checked = Boolean(policy.allow_lifetime);
+  $('policy-durations').value = (policy.allowed_durations || []).join(', ');
+  $('policy-error').textContent = '';
+  $('policy-save').disabled = false;
+  $('policy-save').textContent = 'Save key types';
+  $('policy-dialog').showModal();
+}
+
 async function loadResellers() {
   const sequence = ++state.resellerSeq;
   try {
@@ -214,6 +246,188 @@ async function loadResellers() {
     renderStats();
   } catch (error) {
     if (sequence !== state.resellerSeq) return;
+    handleError(error);
+  }
+}
+
+function planDuration(minutes) {
+  return fmtDuration(minutes);
+}
+
+function renderPlans() {
+  const tbody = $('plans-body');
+  $('plans-count').textContent = state.plans.length
+    ? `${state.plans.length} plan${state.plans.length === 1 ? '' : 's'} in the catalogue`
+    : 'No plans yet';
+  if (!state.plans.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No plans yet. Add one on the left.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.plans.map((plan) => `<tr>
+    <td><strong>${esc(plan.label)}</strong></td>
+    <td>${planDuration(plan.duration_minutes)}</td>
+    <td>${money(plan.price_cents)}</td>
+    <td>${plan.device_mode === 'single' ? 'Single' : 'Unlimited'}</td>
+    <td>${plan.active
+      ? '<span class="badge badge-active">Live</span>'
+      : '<span class="badge badge-revoked">Hidden</span>'}</td>
+    <td><div class="row-actions">
+      <button type="button" class="btn btn-ghost btn-xs" data-plan-action="edit" data-id="${plan.id}">Edit</button>
+      <button type="button" class="btn btn-ghost btn-xs" data-plan-action="toggle" data-id="${plan.id}">${plan.active ? 'Hide' : 'Publish'}</button>
+      <button type="button" class="btn btn-danger btn-xs" data-plan-action="delete" data-id="${plan.id}">Delete</button>
+    </div></td>
+  </tr>`).join('');
+}
+
+function resetPlanForm() {
+  $('plan-id').value = '';
+  $('plan-label').value = '';
+  $('plan-duration').value = '';
+  $('plan-price').value = '';
+  $('plan-mode').value = 'unlimited';
+  $('plan-active').checked = true;
+  $('plan-form-title').textContent = 'Add a plan';
+  $('plan-save-btn').textContent = 'Add plan';
+  $('plan-cancel-btn').hidden = true;
+  $('plan-error').textContent = '';
+}
+
+function editPlan(plan) {
+  $('plan-id').value = String(plan.id);
+  $('plan-label').value = plan.label;
+  $('plan-duration').value =
+    plan.duration_minutes === null ? '' : String(plan.duration_minutes / 1440);
+  $('plan-price').value = (plan.price_cents / 100).toFixed(2);
+  $('plan-mode').value = plan.device_mode;
+  $('plan-active').checked = Boolean(plan.active);
+  $('plan-form-title').textContent = `Edit “${plan.label}”`;
+  $('plan-save-btn').textContent = 'Save plan';
+  $('plan-cancel-btn').hidden = false;
+  $('plan-error').textContent = '';
+  $('plan-label').focus();
+}
+
+function planPayload(plan, overrides) {
+  return {
+    label: plan.label,
+    duration_minutes: plan.duration_minutes,
+    price_cents: plan.price_cents,
+    device_mode: plan.device_mode,
+    active: plan.active,
+    ...overrides,
+  };
+}
+
+async function loadPlans() {
+  try {
+    const data = await api('/api/admin/plans');
+    state.plans = data.plans;
+    renderPlans();
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+function renderMaintenance(data) {
+  state.maintenance = data;
+  $('maintenance-on').checked = Boolean(data.maintenance);
+  $('maintenance-pause').checked = Boolean(data.pause_keys);
+  $('maintenance-block').checked = Boolean(data.block_resellers);
+  $('maintenance-message').value = data.message || '';
+  $('maintenance-pause').disabled = !data.maintenance;
+  $('maintenance-block').disabled = !data.maintenance;
+  $('maintenance-status').textContent = data.maintenance
+    ? (data.pause_keys ? 'ON — key timers are paused' : 'ON — site open, timers running')
+    : 'OFF — normal service';
+}
+
+async function loadMaintenance() {
+  try {
+    const data = await api('/api/admin/maintenance');
+    renderMaintenance(data.maintenance);
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+function accessBadge(result) {
+  const label = String(result || 'unknown').replace(/_/g, ' ');
+  if (result === 'valid') return `<span class="badge badge-active">${esc(label)}</span>`;
+  if (String(result).startsWith('banned')) {
+    return `<span class="badge badge-revoked">${esc(label)}</span>`;
+  }
+  return `<span class="badge badge-expired">${esc(label)}</span>`;
+}
+
+function renderAccess() {
+  if (!state.access) return;
+  const { events, bans, summary } = state.access;
+  $('access-summary').textContent =
+    `${Number(summary.last_24h).toLocaleString()} checks in the last 24h · ` +
+    `${Number(summary.last_24h_valid).toLocaleString()} passed · ` +
+    `${Number(summary.bans).toLocaleString()} blocked value${summary.bans === 1 ? '' : 's'}`;
+
+  const bansBody = $('bans-body');
+  if (!bans.length) {
+    bansBody.innerHTML = '<tr><td colspan="5" class="empty">No banned IPs or devices.</td></tr>';
+  } else {
+    bansBody.innerHTML = bans.map((ban) => `<tr>
+      <td>${ban.kind === 'ip'
+        ? '<span class="badge badge-unused">IP</span>'
+        : '<span class="badge badge-suspended">HWID</span>'}</td>
+      <td class="mono small">${esc(ban.value)}</td>
+      <td>${ban.note ? esc(ban.note) : '<span class="muted">—</span>'}</td>
+      <td>${fmtDateTime(ban.created_at)}</td>
+      <td><button type="button" class="btn btn-ghost btn-xs" data-unban="${ban.id}">Unban</button></td>
+    </tr>`).join('');
+  }
+
+  const eventsBody = $('access-body');
+  if (!events.length) {
+    eventsBody.innerHTML = '<tr><td colspan="6" class="empty">No verification attempts recorded yet.</td></tr>';
+    return;
+  }
+  eventsBody.innerHTML = events.map((item) => `<tr>
+    <td>${fmtDateTime(item.created_at)}</td>
+    <td><span class="badge ${item.source === 'sub' ? 'badge-suspended' : 'badge-unused'}">${esc(item.source)}</span></td>
+    <td><code class="small">${esc(item.key_display || '—')}</code></td>
+    <td class="mono small">${esc(item.ip || '—')}</td>
+    <td class="mono small">${item.hwid
+      ? `<span title="${esc(item.hwid)}">${esc(shorten(item.hwid, 24))}</span>`
+      : '<span class="muted">—</span>'}</td>
+    <td>${accessBadge(item.result)}</td>
+  </tr>`).join('');
+}
+
+async function loadAccess() {
+  try {
+    state.access = await api('/api/admin/access?limit=200');
+    renderAccess();
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+function renderProxy(data) {
+  state.proxy = data;
+  $('proxy-mode').value = data.mode;
+  $('proxy-host').value = data.host || '';
+  $('proxy-port').value = data.port || '443';
+  $('proxy-uuid').value = data.uuid || '';
+  $('proxy-sni').value = data.sni || '';
+  $('proxy-path').value = data.path || '/inri';
+  $('proxy-remark').value = data.remark || 'INRI Proxy';
+  $('proxy-base').value = data.public_base_url || '';
+  $('proxy-test').textContent = data.test_config || '—';
+  $('copy-proxy-test').dataset.copy = data.test_config || '';
+  $('proxy-hint').textContent = data.local_proxy_hint || '';
+  $('proxy-error').textContent = '';
+}
+
+async function loadProxy() {
+  try {
+    renderProxy(await api('/api/admin/proxy'));
+  } catch (error) {
     handleError(error);
   }
 }
@@ -241,6 +455,16 @@ function initIntegration() {
     "    // licensed; timer started on the first successful check\n" +
     "    // expires_at is in milliseconds, or null for a lifetime key\n" +
     '}';
+  $('php-action-url').textContent =
+    `${origin}/api.php?action=validate&key=YOUR-KEY&hwid=DEVICE-ID`;
+  $('php-action-sample').textContent =
+    `GET ${origin}/api.php?action=validate&key=7K2Q-F9XM-W3D4-H8PR-6T2V&hwid=device-fingerprint\n\n` +
+    '{"success":true,"valid":true,"status":"valid","key":"7K2Q-F9XM-W3D4-H8PR-6T2V",\n' +
+    ' "hwid":"device-fingerprint","minutes_remaining":41,\n' +
+    ' "expires_at":"2026-11-15T21:30:00.000Z","single_device":true}\n\n' +
+    'GET .../api.php?action=info&key=YOUR-KEY        (read only, no timer)\n' +
+    'POST .../api.php  action=generate&duration=60&mode=single\n' +
+    '   header: X-API-Key: YOUR-API-KEY';
   $('verify-php').textContent =
     "<?php\n\n" +
     `$url = '${origin}/api/verify';\n` +
@@ -308,18 +532,26 @@ function showGenerated(resultId, valueId, copyId, value) {
 }
 
 function initTabs() {
+  const sections = ['keys', 'resellers', 'plans', 'maintenance', 'access', 'proxy', 'settings'];
+  const loaders = {
+    keys: loadKeys,
+    resellers: loadResellers,
+    plans: loadPlans,
+    maintenance: loadMaintenance,
+    access: loadAccess,
+    proxy: loadProxy,
+    settings: loadIntegration,
+  };
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       const name = tab.dataset.tab;
       document.querySelectorAll('.tab').forEach((other) => {
         other.setAttribute('aria-selected', String(other === tab));
       });
-      ['keys', 'resellers', 'settings'].forEach((section) => {
+      sections.forEach((section) => {
         $(`tab-${section}`).hidden = section !== name;
       });
-      if (name === 'keys') loadKeys();
-      if (name === 'resellers') loadResellers();
-      if (name === 'settings') loadIntegration();
+      if (loaders[name]) loaders[name]();
     });
   });
 }
@@ -364,6 +596,7 @@ function initEvents() {
   $('overview-refresh').addEventListener('click', refreshStats);
   $('refresh-keys').addEventListener('click', loadKeys);
   $('refresh-resellers').addEventListener('click', loadResellers);
+  $('refresh-plans').addEventListener('click', loadPlans);
 
   $('key-search').addEventListener('input', debounce(loadKeys, 300));
   $('key-status').addEventListener('change', loadKeys);
@@ -426,10 +659,15 @@ function initEvents() {
     event.preventDefault();
     const errorEl = $('reseller-error');
     errorEl.textContent = '';
+    const displayName = $('reseller-name').value.trim();
     const username = $('reseller-username').value.trim();
     const password = $('reseller-password').value;
     const rawBalance = $('reseller-balance').value.trim() || '0';
     const dollars = Number(rawBalance);
+    if (displayName.length < 2) {
+      errorEl.textContent = 'Add a name for the reseller (at least 2 characters).';
+      return;
+    }
     if (!username || !password) {
       errorEl.textContent = 'Enter a username and password.';
       return;
@@ -445,11 +683,13 @@ function initEvents() {
       await api('/api/admin/resellers', {
         method: 'POST',
         body: {
+          display_name: displayName,
           username,
           password,
           balance_cents: Math.round(dollars * 100),
         },
       });
+      $('reseller-name').value = '';
       $('reseller-username').value = '';
       $('reseller-password').value = '';
       $('reseller-balance').value = '0';
@@ -471,6 +711,10 @@ function initEvents() {
     const reseller = state.resellers.find((item) => item.id === id);
     if (!reseller) return;
     const action = button.dataset.action;
+    if (action === 'policy') {
+      openPolicy(reseller);
+      return;
+    }
     button.disabled = true;
     try {
       if (action === 'adjust') {
@@ -521,6 +765,277 @@ function initEvents() {
     } catch (error) {
       handleError(error);
       button.disabled = false;
+    }
+  });
+
+  $('plan-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const errorEl = $('plan-error');
+    errorEl.textContent = '';
+    const label = $('plan-label').value.trim();
+    if (!label) {
+      errorEl.textContent = 'Name the plan (for example: 1 day).';
+      return;
+    }
+    let duration = null;
+    const rawDuration = $('plan-duration').value.trim();
+    if (rawDuration !== '') {
+      const days = Number(rawDuration);
+      if (!Number.isFinite(days) || days <= 0) {
+        errorEl.textContent = 'Duration must be a number of days, or blank for lifetime.';
+        return;
+      }
+      duration = Math.round(days * 1440);
+      if (duration < 1 || duration > 10000000) {
+        errorEl.textContent = 'Duration must be between 1 minute and 10,000,000 minutes.';
+        return;
+      }
+    }
+    const price = Number($('plan-price').value);
+    if (!Number.isFinite(price) || price < 0) {
+      errorEl.textContent = 'Enter a price of $0 or more.';
+      return;
+    }
+    const planId = $('plan-id').value;
+    const body = {
+      label,
+      duration_minutes: duration,
+      price_cents: Math.round(price * 100),
+      device_mode: $('plan-mode').value,
+      active: $('plan-active').checked,
+    };
+    const button = $('plan-save-btn');
+    button.disabled = true;
+    try {
+      const data = await api(planId ? `/api/admin/plans/${planId}` : '/api/admin/plans', {
+        method: 'POST',
+        body,
+      });
+      toast(data.message || 'Plan saved.', 'success');
+      resetPlanForm();
+      await loadPlans();
+    } catch (error) {
+      if (error.status === 401) handleError(error);
+      else errorEl.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $('plan-cancel-btn').addEventListener('click', resetPlanForm);
+
+  $('plans-body').addEventListener('click', async (event) => {
+    const button = event.target.closest('button[data-plan-action]');
+    if (!button) return;
+    const plan = state.plans.find((item) => item.id === Number(button.dataset.id));
+    if (!plan) return;
+    const action = button.dataset.planAction;
+    if (action === 'edit') {
+      editPlan(plan);
+      return;
+    }
+    if (action === 'delete') {
+      if (!window.confirm(`Delete the plan “${plan.label}”?\n\nKeys already sold keep their duration; the plan just disappears from the shop.`)) {
+        return;
+      }
+      button.disabled = true;
+      try {
+        await api(`/api/admin/plans/${plan.id}/delete`, { method: 'POST', body: {} });
+        toast('Plan deleted.', 'success');
+        resetPlanForm();
+        await loadPlans();
+      } catch (error) {
+        handleError(error);
+        button.disabled = false;
+      }
+      return;
+    }
+    if (action === 'toggle') {
+      button.disabled = true;
+      try {
+        await api(`/api/admin/plans/${plan.id}`, {
+          method: 'POST',
+          body: planPayload(plan, { active: !plan.active }),
+        });
+        toast(plan.active ? 'Plan hidden from resellers.' : 'Plan published.', 'success');
+        await loadPlans();
+      } catch (error) {
+        handleError(error);
+        button.disabled = false;
+      }
+    }
+  });
+
+  $('maintenance-on').addEventListener('change', () => {
+    const on = $('maintenance-on').checked;
+    $('maintenance-pause').disabled = !on;
+    $('maintenance-block').disabled = !on;
+  });
+
+  $('maintenance-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const errorEl = $('maintenance-error');
+    errorEl.textContent = '';
+    const button = $('maintenance-save');
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    try {
+      const data = await api('/api/admin/maintenance', {
+        method: 'POST',
+        body: {
+          on: $('maintenance-on').checked,
+          pause_keys: $('maintenance-pause').checked,
+          block_resellers: $('maintenance-block').checked,
+          message: $('maintenance-message').value.trim(),
+        },
+      });
+      renderMaintenance(data.maintenance);
+      toast(
+        data.maintenance.maintenance ? 'Maintenance mode is ON.' : 'Maintenance mode is OFF.',
+        'success',
+      );
+      await refreshStats();
+    } catch (error) {
+      if (error.status === 401) handleError(error);
+      else errorEl.textContent = error.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Save maintenance settings';
+    }
+  });
+
+  $('policy-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const reseller = state.policyReseller;
+    if (!reseller) return;
+    const errorEl = $('policy-error');
+    errorEl.textContent = '';
+    const allowSingle = $('policy-single').checked;
+    const allowUnlimited = $('policy-unlimited').checked;
+    const allowLifetime = $('policy-lifetime').checked;
+    if (!allowSingle && !allowUnlimited) {
+      errorEl.textContent = 'Allow single-device keys, unlimited-device keys, or both.';
+      return;
+    }
+    const durations = [];
+    const raw = $('policy-durations').value.trim();
+    if (raw) {
+      for (const part of raw.split(',')) {
+        const text = part.trim();
+        if (!text) continue;
+        const value = Number(text);
+        if (!Number.isInteger(value) || value < 1 || value > 10000000) {
+          errorEl.textContent = 'Durations are whole minutes (1 to 10,000,000), separated by commas.';
+          return;
+        }
+        if (!durations.includes(value)) durations.push(value);
+      }
+      if (durations.length > 16) {
+        errorEl.textContent = 'Keep the duration list to 16 entries or fewer.';
+        return;
+      }
+    }
+    const button = $('policy-save');
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    try {
+      await api(`/api/admin/resellers/${reseller.id}/policy`, {
+        method: 'POST',
+        body: {
+          allow_single: allowSingle,
+          allow_unlimited: allowUnlimited,
+          allow_lifetime: allowLifetime,
+          allowed_durations: durations,
+        },
+      });
+      $('policy-dialog').close();
+      toast('Key types updated.', 'success');
+      await loadResellers();
+    } catch (error) {
+      if (error.status === 401) handleError(error);
+      else errorEl.textContent = error.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Save key types';
+    }
+  });
+
+  $('policy-cancel').addEventListener('click', () => $('policy-dialog').close());
+
+  $('refresh-access').addEventListener('click', loadAccess);
+
+  $('ban-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const errorEl = $('ban-error');
+    errorEl.textContent = '';
+    const kind = $('ban-kind').value;
+    const value = $('ban-value').value.trim();
+    const note = $('ban-note').value.trim();
+    if (!value) {
+      errorEl.textContent = 'Enter the IP address or device id to ban.';
+      return;
+    }
+    const button = $('ban-btn');
+    button.disabled = true;
+    try {
+      await api('/api/admin/bans', { method: 'POST', body: { kind, value, note } });
+      $('ban-value').value = '';
+      $('ban-note').value = '';
+      toast(`${kind === 'ip' ? 'IP address' : 'Device'} banned.`, 'success');
+      await loadAccess();
+    } catch (error) {
+      if (error.status === 401) handleError(error);
+      else errorEl.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  $('bans-body').addEventListener('click', async (event) => {
+    const button = event.target.closest('button[data-unban]');
+    if (!button) return;
+    const banId = Number(button.dataset.unban);
+    if (!banId || !window.confirm('Remove this ban? The IP or device can verify again.')) return;
+    button.disabled = true;
+    try {
+      await api(`/api/admin/bans/${banId}`, { method: 'DELETE' });
+      toast('Ban removed.', 'success');
+      await loadAccess();
+    } catch (error) {
+      handleError(error);
+      button.disabled = false;
+    }
+  });
+
+  $('proxy-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const errorEl = $('proxy-error');
+    errorEl.textContent = '';
+    const button = $('proxy-save-btn');
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    try {
+      const data = await api('/api/admin/proxy', {
+        method: 'POST',
+        body: {
+          mode: $('proxy-mode').value,
+          host: $('proxy-host').value.trim(),
+          port: $('proxy-port').value.trim(),
+          uuid: $('proxy-uuid').value.trim(),
+          sni: $('proxy-sni').value.trim(),
+          path: $('proxy-path').value.trim(),
+          remark: $('proxy-remark').value.trim(),
+          public_base_url: $('proxy-base').value.trim(),
+        },
+      });
+      renderProxy(data);
+      toast('Proxy settings saved. New subscriptions use them immediately.', 'success');
+    } catch (error) {
+      if (error.status === 401) handleError(error);
+      else errorEl.textContent = error.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Save proxy';
     }
   });
 
