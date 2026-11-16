@@ -622,10 +622,10 @@
                   <label class="field">
                     <span>Mode</span>
                     <select id="proxy-mode">
-                      <option value="test">Test config (local, non-functional)</option>
+                      <option value="test">Test config (same server, for IP checks)</option>
                       <option value="live">Live proxy</option>
                     </select>
-                    <small class="hint">Test mode emits a local placeholder config so you can exercise the whole flow before you own a proxy server.</small>
+                    <small class="hint">Both modes use the host below. Import the test config first and confirm your IP changes before handing out keys.</small>
                   </label>
                   <label class="field">
                     <span>Proxy host</span>
@@ -649,7 +649,7 @@
                   </label>
                   <label class="field">
                     <span>Profile name</span>
-                    <input id="proxy-remark" maxlength="40" autocomplete="off" placeholder="INRI Proxy">
+                    <input id="proxy-remark" maxlength="40" autocomplete="off" placeholder="INRI H4X">
                   </label>
                   <label class="field">
                     <span>Public base URL (optional)</span>

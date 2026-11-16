@@ -1223,7 +1223,7 @@ def admin_proxy_save(ctx):
     path = (body.get('path') or '/inri').strip() or '/inri'
     if not path.startswith('/') or len(path) > 80 or not re.fullmatch(r'/[A-Za-z0-9._~/-]*', path):
         raise ApiError(400, 'Path must start with "/" and use simple characters only.')
-    remark = (body.get('remark') or 'INRI Proxy').strip()[:40] or 'INRI Proxy'
+    remark = (body.get('remark') or 'INRI H4X').strip()[:40] or 'INRI H4X'
     base = (body.get('public_base_url') or '').strip().rstrip('/')
     if base and not re.fullmatch(r'https?://[^\s]+', base):
         raise ApiError(400, 'Public base URL must start with http:// or https://.')

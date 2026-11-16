@@ -1,4 +1,3 @@
-import base64
 import os
 import re
 import uuid
@@ -196,9 +195,8 @@ def proxy_config(conn):
         port = 443
     if not 1 <= port <= 65535:
         port = 443
-    if mode != 'live' or not host:
+    if not host:
         host = '127.0.0.1'
-        port = 443
         mode = 'test'
     return {
         'mode': mode,
@@ -207,7 +205,7 @@ def proxy_config(conn):
         'uuid': (db.get_setting(conn, 'happ_uuid') or '').strip(),
         'sni': (db.get_setting(conn, 'happ_sni') or '').strip() or host,
         'path': (db.get_setting(conn, 'happ_path') or '/inri').strip() or '/inri',
-        'remark': (db.get_setting(conn, 'happ_remark') or 'INRI Proxy').strip() or 'INRI Proxy',
+        'remark': (db.get_setting(conn, 'happ_remark') or 'INRI H4X').strip() or 'INRI H4X',
     }
 
 
@@ -218,8 +216,6 @@ def vless_uri(conn, key_norm, label=None):
         node_id = str(uuid.uuid5(uuid.NAMESPACE_URL, 'inri-proxy:' + (key_norm or 'test')))
     path = cfg['path'] if cfg['path'].startswith('/') else '/' + cfg['path']
     remark = label or cfg['remark']
-    if cfg['mode'] == 'test':
-        remark = '{} TEST'.format(remark)
     query = (
         'encryption=none&security=tls&sni={sni}&fp=chrome&type=ws&host={sni}&path={path}'
     ).format(sni=quote(cfg['sni'], safe=''), path=quote(path, safe=''))
@@ -238,8 +234,7 @@ def subscription_url(conn, ctx, row, hwid=None):
 
 
 def happ_link(url):
-    encoded = base64.urlsafe_b64encode(url.encode('utf-8')).decode('ascii').rstrip('=')
-    return 'happ://add/' + encoded
+    return 'happ://add/' + url
 
 
 def _state_payload(conn, ctx, row, access, now):
@@ -465,9 +460,10 @@ def subscription(conn, raw_key, params, ip, user_agent, headers=None):
     )
     config = vless_uri(conn, row['key_norm'])
     lines = [
-        '#profile-title: INRI Proxy',
-        '#profile-update-interval: 6',
+        '#profile-title: INRI H4X',
+        '#profile-update-interval: 1',
         '#subscription-always-hwid-enable: 1',
+        '#sub-expire: 1',
     ]
     if projected_expires:
         lines.append(
@@ -479,8 +475,9 @@ def subscription(conn, raw_key, params, ip, user_agent, headers=None):
     headers = {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-store',
-        'profile-title': 'INRI Proxy',
-        'profile-update-interval': '6',
+        'profile-title': 'INRI H4X',
+        'profile-update-interval': '1',
+        'sub-expire': '1',
     }
     if projected_expires:
         headers['subscription-userinfo'] = 'upload=0; download=0; total=0; expire={}'.format(
@@ -498,7 +495,7 @@ def admin_proxy_state(conn):
         'uuid': db.get_setting(conn, 'happ_uuid') or '',
         'sni': db.get_setting(conn, 'happ_sni') or '',
         'path': db.get_setting(conn, 'happ_path') or '/inri',
-        'remark': db.get_setting(conn, 'happ_remark') or 'INRI Proxy',
+        'remark': db.get_setting(conn, 'happ_remark') or 'INRI H4X',
         'public_base_url': db.get_setting(conn, SUB_BASE_SETTING) or '',
         'test_config': vless_uri(conn, 'test'),
         'local_proxy_hint': (

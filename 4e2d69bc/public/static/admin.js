@@ -416,7 +416,7 @@ function renderProxy(data) {
   $('proxy-uuid').value = data.uuid || '';
   $('proxy-sni').value = data.sni || '';
   $('proxy-path').value = data.path || '/inri';
-  $('proxy-remark').value = data.remark || 'INRI Proxy';
+  $('proxy-remark').value = data.remark || 'INRI H4X';
   $('proxy-base').value = data.public_base_url || '';
   $('proxy-test').textContent = data.test_config || '—';
   $('copy-proxy-test').dataset.copy = data.test_config || '';
