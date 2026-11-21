@@ -75,6 +75,9 @@ ROUTES = [
     Route('GET', '/api/portal/session', lambda ctx: portal.session_info(ctx)),
     Route('POST', '/api/portal/bind', lambda ctx: portal.bind_device(ctx)),
     Route('POST', '/api/portal/logout', lambda ctx: portal.logout_portal(ctx)),
+    Route('POST', '/api/portal/app-ticket', lambda ctx: portal.create_app_ticket(ctx)),
+    Route('POST', '/api/app/authorize', lambda ctx: portal.authorize_app(ctx)),
+    Route('GET', '/api/app/status', lambda ctx: portal.app_ticket_status(ctx)),
 
     Route('GET', '/api/reseller/me', lambda ctx: reseller_me(ctx), role='reseller'),
     Route('GET', '/api/reseller/keys', lambda ctx: reseller_keys(ctx), role='reseller'),
@@ -474,6 +477,8 @@ def serialize_key(row, now=None, paused_since=0):
     )
     state = key_state(row, now, paused_since)
     last_sub_at = portal.row_value(row, 'last_sub_at')
+    last_app_at = portal.row_value(row, 'last_app_at')
+    last_seen = max(int(last_sub_at or 0), int(last_app_at or 0))
     return {
         'id': row['id'],
         'key': row['key_display'],
@@ -487,9 +492,10 @@ def serialize_key(row, now=None, paused_since=0):
         'expires_at': expires_at,
         'last_verified_at': row['last_verified_at'],
         'last_sub_at': last_sub_at,
-        'online': bool(last_sub_at)
+        'last_app_at': last_app_at,
+        'online': bool(last_seen)
         and state == 'active'
-        and now - int(last_sub_at) <= portal.ONLINE_WINDOW_MS,
+        and now - last_seen <= portal.ONLINE_WINDOW_MS,
         'verify_count': row['verify_count'],
         'created_at': row['created_at'],
         'created_by_role': row['created_by_role'],

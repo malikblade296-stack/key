@@ -111,6 +111,18 @@ CREATE TABLE IF NOT EXISTS plans (
 );
 
 CREATE INDEX IF NOT EXISTS idx_plans_active ON plans (active);
+
+CREATE TABLE IF NOT EXISTS app_tickets (
+    ticket TEXT PRIMARY KEY,
+    key_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'authorized')),
+    hwid TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    authorized_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_tickets_key ON app_tickets (key_id);
 """
 
 RESELLER_COLUMNS = (
@@ -124,6 +136,7 @@ RESELLER_COLUMNS = (
 KEY_COLUMNS = (
     ('price_cents', 'INTEGER NOT NULL DEFAULT 0'),
     ('last_sub_at', 'INTEGER'),
+    ('last_app_at', 'INTEGER'),
 )
 
 

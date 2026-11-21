@@ -35,11 +35,12 @@
       <div class="dash-hero-copy">
         <span class="proxy-status offline" id="web-status"><span class="proxy-dot"></span>WEB OFFLINE</span>
         <h1>INRI Proxy <span class="grad">dashboard</span></h1>
-        <p class="muted" id="status-note">Your browser is not tunnelled. Connect Happ to bring the tunnel online.</p>
+        <p class="muted" id="status-note">Connect the INRI app to bring your access online.</p>
       </div>
       <div class="dash-actions">
-        <button class="btn btn-primary" id="connect-btn" type="button">Connect to Happ</button>
-        <button class="btn btn-ghost" id="copy-sub-btn" type="button" data-copy="">Copy subscription link</button>
+        <button class="btn btn-primary" id="connect-btn" type="button">Connect INRI Proxy</button>
+        <button class="btn btn-ghost" id="copy-sub-btn" type="button" data-copy="">Copy connection link</button>
+        <p class="form-error" id="app-error" role="alert"></p>
       </div>
     </section>
 
@@ -59,7 +60,7 @@
             <div><dt>Activated</dt><dd id="license-activated">—</dd></div>
             <div><dt>Expires</dt><dd id="license-expires">—</dd></div>
             <div><dt>Time left</dt><dd id="license-left" class="mono">—</dd></div>
-            <div><dt>Happ</dt><dd id="license-online">—</dd></div>
+            <div><dt>App</dt><dd id="license-online">—</dd></div>
           </dl>
         </div>
       </section>
@@ -68,7 +69,7 @@
         <div class="panel-head">
           <div>
             <h2>Device lock</h2>
-            <p id="bind-note">The device ID is sent automatically by the Happ connection.</p>
+            <p id="bind-note">The device ID is sent automatically by the INRI app when it authorizes.</p>
           </div>
         </div>
         <div class="panel-inner">
@@ -79,19 +80,19 @@
       <section class="panel">
         <div class="panel-head">
           <div>
-            <h2>Happ profile</h2>
-            <p>Import this subscription once; Happ refreshes it automatically.</p>
+            <h2>Connection profile</h2>
+            <p>Profile link used by the INRI app. Keep it private.</p>
           </div>
           <button class="btn btn-ghost btn-sm" id="copy-url-2" type="button" data-copy="">Copy</button>
         </div>
         <div class="panel-inner">
           <div id="sub-url-wrap">
-            <textarea class="result-keys mono" id="sub-url" rows="3" readonly aria-label="Happ subscription URL"></textarea>
-            <p class="small muted">If the import button does not open Happ, copy this URL and add it in Happ → Subscriptions → Add by URL.</p>
+            <textarea class="result-keys mono" id="sub-url" rows="3" readonly aria-label="Connection profile link"></textarea>
+            <p class="small muted">Paste this link into the app if it asks for a profile URL.</p>
           </div>
           <div class="encrypted-note" id="encrypted-note" hidden>
-            <p class="eyebrow">Encrypted subscription</p>
-            <p class="small muted">The subscription URL and server settings are hidden. Import the encrypted link into Happ — it cannot be viewed, edited or shared inside the app.</p>
+            <p class="eyebrow">Encrypted profile</p>
+            <p class="small muted">The profile URL and server settings are hidden. Import the encrypted link into the app — it cannot be viewed, edited or shared.</p>
             <button class="btn btn-ghost btn-sm" id="copy-crypt" type="button" data-copy="">Copy encrypted link</button>
           </div>
           <p class="form-error" id="encrypt-error" role="alert"></p>
@@ -114,7 +115,7 @@
         <div class="panel-inner">
           <p class="small muted">The dashboard itself does not tunnel your browser. For a local web-proxy test, run the bundled proxy and point your browser at it:</p>
           <pre class="integration-code" id="local-proxy-hint">python scripts/dev_proxy.py 8899</pre>
-          <p class="small muted">Then set the browser HTTP/HTTPS proxy to <code>127.0.0.1:8899</code>. Phone traffic goes through Happ.</p>
+          <p class="small muted">Then set the browser HTTP/HTTPS proxy to <code>127.0.0.1:8899</code>. Phone traffic is handled by the INRI app.</p>
         </div>
       </section>
     </div>

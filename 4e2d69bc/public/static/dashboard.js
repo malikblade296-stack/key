@@ -46,7 +46,7 @@ function render() {
     fmtLeft(currentLeft()) + (data.timer_paused ? ' · paused' : '');
   $('device-state').textContent =
     data.device_mode === 'single'
-      ? (data.locked_hwid ? `Locked to ${data.locked_hwid}` : 'Waiting for the first Happ connection')
+      ? (data.locked_hwid ? `Locked to ${data.locked_hwid}` : 'Waiting for the first app authorization')
       : 'Unlimited — no device lock';
 
   const bound = data.device_mode === 'single' && Boolean(data.locked_hwid);
@@ -55,7 +55,7 @@ function render() {
       ? 'Unlimited keys work on any device.'
       : bound
         ? 'This key is locked. Ask the administrator to reset it to move to another device.'
-        : 'The device ID arrives automatically from the Happ connection — nothing to paste.';
+        : 'The device ID arrives automatically when the INRI app authorizes this key.';
 
   $('sub-url').value = data.subscription_url || '';
   const encrypted = Boolean(data.encrypted_links);
@@ -65,7 +65,6 @@ function render() {
   $('manual-config').hidden = encrypted;
   $('copy-crypt').dataset.copy = link;
   $('encrypt-error').textContent = data.encryption_error || '';
-  $('connect-btn').disabled = encrypted && !link;
   $('copy-sub-btn').dataset.copy = link;
   $('copy-url-2').dataset.copy = link;
   $('test-config').textContent = data.config || '';
@@ -78,15 +77,17 @@ function render() {
   status.classList.toggle('offline', !online);
   status.innerHTML = `<span class="proxy-dot"></span>${online ? 'WEB ONLINE' : 'WEB OFFLINE'}`;
   const lastSub = data.last_sub_at ? fmtDateTime(data.last_sub_at) : '';
+  const lastApp = data.last_app_at ? fmtDateTime(data.last_app_at) : '';
+  const lastSeen = lastApp || lastSub;
   $('status-note').textContent = online
-    ? `Happ is connected${lastSub ? ` — last refresh ${lastSub}` : ''}.`
-    : lastSub
-      ? `Happ was last seen ${lastSub}. Open Happ and refresh the subscription.`
-      : 'Waiting for Happ: add the subscription once and it appears online here.';
+    ? `The INRI app is connected${lastSeen ? ` — last check-in ${lastSeen}` : ''}.`
+    : lastSeen
+      ? `The INRI app was last seen ${lastSeen}. Open it to reconnect.`
+      : 'Waiting for the INRI app: press Connect INRI Proxy and authorize this key.';
   $('license-online').textContent = online
-    ? 'Web online — Happ connected'
-    : lastSub
-      ? `Offline — last seen ${lastSub}`
+    ? 'Online — INRI app connected'
+    : lastSeen
+      ? `Offline — last seen ${lastSeen}`
       : 'Not connected yet';
 
   if (data.expires_at && Number(data.expires_at) <= Date.now()) {
@@ -117,16 +118,28 @@ async function refresh() {
   }
 }
 
-function connectHapp() {
+async function connectApp() {
   const data = state.data;
-  if (!data || !data.happ_link) {
-    $('encrypt-error').textContent =
-      data && data.encryption_error ? data.encryption_error : 'No Happ link is available yet.';
-    return;
+  const errorEl = $('app-error');
+  errorEl.textContent = '';
+  if (!data) return;
+  $('connect-btn').disabled = true;
+  try {
+    const ticket = await api('/api/portal/app-ticket', { method: 'POST', body: {} });
+    $('status-note').textContent =
+      'Authorization sent. Opening the INRI app — keep it on the waiting screen.';
+    window.location.href = ticket.deep_link;
+    setTimeout(() => {
+      if (!document.hidden) {
+        errorEl.textContent =
+          'If the app did not open, install the INRI app on this phone and press Connect again.';
+      }
+      $('connect-btn').disabled = false;
+    }, 2000);
+  } catch (error) {
+    errorEl.textContent = error.message || 'Could not create an app authorization.';
+    $('connect-btn').disabled = false;
   }
-  $('status-note').textContent =
-    'Opening Happ… the web page stays offline; Happ holds the tunnel.';
-  window.location.href = data.happ_link;
 }
 
 async function copySub() {
@@ -136,7 +149,7 @@ async function copySub() {
 }
 
 async function boot() {
-  $('connect-btn').addEventListener('click', connectHapp);
+  $('connect-btn').addEventListener('click', connectApp);
   $('copy-sub-btn').addEventListener('click', copySub);
   $('copy-url-2').addEventListener('click', () => {
     const data = state.data;

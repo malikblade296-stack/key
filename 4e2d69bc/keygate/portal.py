@@ -18,6 +18,8 @@ ONLINE_WINDOW_MS = 5 * 60 * 1000
 ENCRYPT_SETTING = 'happ_encrypt_links'
 CRYPTO_API = os.environ.get('HAPP_CRYPTO_API', 'https://crypto.happ.su/api-v2.php')
 CRYPT_LOCK = threading.Lock()
+APP_DEEP_LINK = os.environ.get('APP_DEEP_LINK', 'inri://auth')
+APP_TICKET_TTL_MS = 10 * 60 * 1000
 
 
 class PortalError(Exception):
@@ -66,10 +68,13 @@ def row_value(row, name, default=None):
 
 
 def is_online(row, now):
-    last = row_value(row, 'last_sub_at')
-    if not last:
+    last = max(
+        int(row_value(row, 'last_sub_at') or 0),
+        int(row_value(row, 'last_app_at') or 0),
+    )
+    if last <= 0:
         return False
-    return now - int(last) <= ONLINE_WINDOW_MS and key_state(row, now) == 'active'
+    return now - last <= ONLINE_WINDOW_MS and key_state(row, now) == 'active'
 
 
 def configured_base(conn):
@@ -376,6 +381,7 @@ def _state_payload(conn, ctx, row, access, now):
         'proxy_mode': cfg['mode'],
         'web_online': online,
         'last_sub_at': row_value(row, 'last_sub_at'),
+        'last_app_at': row_value(row, 'last_app_at'),
         'online_window_minutes': ONLINE_WINDOW_MS // 60000,
         'web_proxy': 'online' if online else 'offline',
         'local_proxy_hint': (
@@ -476,6 +482,140 @@ def session_info(ctx):
     if access is None:
         raise PortalError(401, 'Enter a valid key to open the dashboard.')
     return _state_payload(conn, ctx, access['key'], access, security.now_ms())
+
+
+def create_app_ticket(ctx):
+    conn = ctx['conn']
+    access = read_access(conn, ctx.get('access_token'), ctx['ip'])
+    if access is None:
+        raise PortalError(401, 'Enter a valid key to open the dashboard.')
+    row = access['key']
+    now = security.now_ms()
+    state = key_state(row, now, maintenance.paused_at(conn))
+    if state in ('revoked', 'suspended'):
+        raise PortalError(403, 'This key is not active.')
+    if state == 'expired':
+        raise PortalError(410, 'This key has expired. Get a new key to continue.')
+    ticket = security.random_token()
+    expires = now + APP_TICKET_TTL_MS
+    conn.execute('DELETE FROM app_tickets WHERE expires_at <= ?', (now,))
+    conn.execute(
+        'INSERT INTO app_tickets (ticket, key_id, status, hwid, created_at, expires_at) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        (ticket, row['id'], 'pending', '', now, expires),
+    )
+    separator = '&' if '?' in APP_DEEP_LINK else '?'
+    deep_link = APP_DEEP_LINK + separator + 'ticket=' + quote(ticket, safe='')
+    return {
+        'ok': True,
+        'ticket': ticket,
+        'deep_link': deep_link,
+        'expires_at': expires,
+        'key': row['key_display'],
+    }
+
+
+def _app_auth_payload(row, now, paused):
+    expires = maintenance.effective_expiry(
+        row['expires_at'], now, paused, row['activated_at']
+    )
+    return {
+        'ok': True,
+        'authorized': True,
+        'key': row['key_display'],
+        'device_mode': row['device_mode'],
+        'activated_at': row['activated_at'],
+        'expires_at': expires,
+        'minutes_remaining': minutes_left(expires, now),
+    }
+
+
+def authorize_app(ctx):
+    conn = ctx['conn']
+    now = security.now_ms()
+    ip = ctx['ip']
+    allowed, retry = security.take_rate('appauth:{}'.format(ip), 60, 60)
+    if not allowed:
+        raise PortalError(429, 'Too many attempts. Try again in {} seconds.'.format(retry))
+    body = ctx['body']
+    ticket = body.get('ticket')
+    if not isinstance(ticket, str) or not ticket.strip() or len(ticket) > 200:
+        raise PortalError(400, 'Authorization ticket is required.')
+    ticket = ticket.strip()
+    raw_hwid = body.get('hwid')
+    hwid = raw_hwid.strip()[:MAX_HWID_LENGTH] if isinstance(raw_hwid, str) else ''
+    if not hwid:
+        raise PortalError(400, 'Device ID is required.')
+    record = conn.execute(
+        'SELECT * FROM app_tickets WHERE ticket = ?', (ticket,)
+    ).fetchone()
+    if record is None:
+        raise PortalError(404, 'Unknown authorization ticket.')
+    if int(record['expires_at']) <= now:
+        raise PortalError(410, 'This authorization ticket expired. Press Connect INRI Proxy again.')
+    row = conn.execute('SELECT * FROM keys WHERE id = ?', (record['key_id'],)).fetchone()
+    if row is None:
+        raise PortalError(404, 'Key not found.')
+    paused = maintenance.paused_at(conn)
+    if record['status'] == 'authorized':
+        if record['hwid'] and record['hwid'] != hwid:
+            raise PortalError(409, 'This ticket was already used by another device.')
+        return _app_auth_payload(row, now, paused)
+    state = key_state(row, now, paused)
+    if state in ('revoked', 'suspended', 'expired'):
+        log_attempt(conn, row, ip, hwid, state, 'app')
+        messages = {
+            'revoked': 'This key has been revoked.',
+            'suspended': 'This key is suspended.',
+            'expired': 'This key has expired. Get a new key to continue.',
+        }
+        raise PortalError(403 if state != 'expired' else 410, messages[state])
+    if row['device_mode'] == 'single' and row['hwid'] and row['hwid'] != hwid:
+        log_attempt(conn, row, ip, hwid, 'device_mismatch', 'app')
+        raise PortalError(403, 'Invalid HWID: this key is already locked to another device.')
+    activated_at = row['activated_at']
+    expires_at = row['expires_at']
+    if activated_at is None:
+        activated_at = now
+        expires_at = (
+            None if row['duration_minutes'] is None else now + row['duration_minutes'] * 60_000
+        )
+    new_hwid = row['hwid']
+    if row['device_mode'] == 'single' and not new_hwid:
+        new_hwid = hwid
+    conn.execute(
+        'UPDATE keys SET hwid = ?, activated_at = ?, expires_at = ?, last_verified_at = ?, '
+        'last_app_at = ?, verify_count = verify_count + 1 WHERE id = ?',
+        (new_hwid, activated_at, expires_at, now, now, row['id']),
+    )
+    conn.execute(
+        "UPDATE app_tickets SET status = 'authorized', hwid = ?, authorized_at = ? "
+        'WHERE ticket = ?',
+        (hwid, now, ticket),
+    )
+    log_attempt(conn, row, ip, hwid, 'valid', 'app')
+    refreshed = conn.execute('SELECT * FROM keys WHERE id = ?', (row['id'],)).fetchone()
+    return _app_auth_payload(refreshed, now, paused)
+
+
+def app_ticket_status(ctx):
+    ticket = (ctx['query'].get('ticket') or '').strip()
+    if not ticket or len(ticket) > 200:
+        raise PortalError(400, 'Authorization ticket is required.')
+    record = ctx['conn'].execute(
+        'SELECT * FROM app_tickets WHERE ticket = ?', (ticket,)
+    ).fetchone()
+    if record is None:
+        return {'status': 'unknown'}
+    if record['status'] == 'authorized':
+        return {
+            'status': 'authorized',
+            'hwid': record['hwid'],
+            'authorized_at': record['authorized_at'],
+        }
+    if int(record['expires_at']) <= security.now_ms():
+        return {'status': 'expired'}
+    return {'status': 'pending', 'expires_at': record['expires_at']}
 
 
 def bind_device(ctx):
