@@ -30,6 +30,11 @@ ASSETS = {
     'reseller.js': 'text/javascript; charset=utf-8',
     'admin.js': 'text/javascript; charset=utf-8',
     'dashboard.js': 'text/javascript; charset=utf-8',
+    'aura-poster.png': 'image/png',
+    'aura-video.mp4': 'video/mp4',
+    'phonk-01.wav': 'audio/wav',
+    'phonk-02.wav': 'audio/wav',
+    'phonk-03.wav': 'audio/wav',
 }
 
 ADMIN_PATH = '/admin'

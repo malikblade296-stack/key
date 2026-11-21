@@ -192,9 +192,10 @@ function renderKeys() {
     const expires = key.expires_at
       ? fmtDateTime(key.expires_at)
       : (key.duration_minutes === null ? 'Never' : '—');
+    const liveChip = key.online ? '<span class="live-chip">WEB ONLINE</span>' : '';
     return `<tr>
       <td><div class="key-cell"><code>${esc(key.key)}</code><button type="button" class="copy-btn" data-copy="${esc(key.key)}">Copy</button></div></td>
-      <td>${badge(key.state)}</td>
+      <td><div class="state-cell">${badge(key.state)}${liveChip}</div></td>
       <td>${money(key.price_cents)}</td>
       <td>${device}</td>
       <td>${fmtDuration(key.duration_minutes)}</td>

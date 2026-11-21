@@ -59,6 +59,7 @@
             <div><dt>Activated</dt><dd id="license-activated">—</dd></div>
             <div><dt>Expires</dt><dd id="license-expires">—</dd></div>
             <div><dt>Time left</dt><dd id="license-left" class="mono">—</dd></div>
+            <div><dt>Happ</dt><dd id="license-online">—</dd></div>
           </dl>
         </div>
       </section>
@@ -84,9 +85,17 @@
           <button class="btn btn-ghost btn-sm" id="copy-url-2" type="button" data-copy="">Copy</button>
         </div>
         <div class="panel-inner">
-          <textarea class="result-keys mono" id="sub-url" rows="3" readonly aria-label="Happ subscription URL"></textarea>
-          <p class="small muted">If the import button does not open Happ, copy this URL and add it in Happ → Subscriptions → Add by URL.</p>
-          <details class="test-config">
+          <div id="sub-url-wrap">
+            <textarea class="result-keys mono" id="sub-url" rows="3" readonly aria-label="Happ subscription URL"></textarea>
+            <p class="small muted">If the import button does not open Happ, copy this URL and add it in Happ → Subscriptions → Add by URL.</p>
+          </div>
+          <div class="encrypted-note" id="encrypted-note" hidden>
+            <p class="eyebrow">Encrypted subscription</p>
+            <p class="small muted">The subscription URL and server settings are hidden. Import the encrypted link into Happ — it cannot be viewed, edited or shared inside the app.</p>
+            <button class="btn btn-ghost btn-sm" id="copy-crypt" type="button" data-copy="">Copy encrypted link</button>
+          </div>
+          <p class="form-error" id="encrypt-error" role="alert"></p>
+          <details class="test-config" id="manual-config">
             <summary>Device config for manual import</summary>
             <pre class="integration-code" id="test-config"></pre>
             <button class="btn btn-ghost btn-sm" id="copy-config" type="button" data-copy="">Copy config</button>

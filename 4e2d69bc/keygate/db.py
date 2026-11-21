@@ -121,7 +121,10 @@ RESELLER_COLUMNS = (
     ('allowed_durations', "TEXT NOT NULL DEFAULT ''"),
 )
 
-KEY_COLUMNS = (('price_cents', 'INTEGER NOT NULL DEFAULT 0'),)
+KEY_COLUMNS = (
+    ('price_cents', 'INTEGER NOT NULL DEFAULT 0'),
+    ('last_sub_at', 'INTEGER'),
+)
 
 
 def connect():

@@ -58,11 +58,36 @@ function render() {
         : 'The device ID arrives automatically from the Happ connection — nothing to paste.';
 
   $('sub-url').value = data.subscription_url || '';
-  $('copy-sub-btn').dataset.copy = data.subscription_url || '';
-  $('copy-url-2').dataset.copy = data.subscription_url || '';
+  const encrypted = Boolean(data.encrypted_links);
+  const link = encrypted ? (data.happ_link || '') : (data.subscription_url || '');
+  $('sub-url-wrap').hidden = encrypted;
+  $('encrypted-note').hidden = !encrypted;
+  $('manual-config').hidden = encrypted;
+  $('copy-crypt').dataset.copy = link;
+  $('encrypt-error').textContent = data.encryption_error || '';
+  $('connect-btn').disabled = encrypted && !link;
+  $('copy-sub-btn').dataset.copy = link;
+  $('copy-url-2').dataset.copy = link;
   $('test-config').textContent = data.config || '';
   $('copy-config').dataset.copy = data.config || '';
   $('local-proxy-hint').textContent = data.local_proxy_hint || 'python scripts/dev_proxy.py 8899';
+
+  const online = Boolean(data.web_online);
+  const status = $('web-status');
+  status.classList.toggle('online', online);
+  status.classList.toggle('offline', !online);
+  status.innerHTML = `<span class="proxy-dot"></span>${online ? 'WEB ONLINE' : 'WEB OFFLINE'}`;
+  const lastSub = data.last_sub_at ? fmtDateTime(data.last_sub_at) : '';
+  $('status-note').textContent = online
+    ? `Happ is connected${lastSub ? ` — last refresh ${lastSub}` : ''}.`
+    : lastSub
+      ? `Happ was last seen ${lastSub}. Open Happ and refresh the subscription.`
+      : 'Waiting for Happ: add the subscription once and it appears online here.';
+  $('license-online').textContent = online
+    ? 'Web online — Happ connected'
+    : lastSub
+      ? `Offline — last seen ${lastSub}`
+      : 'Not connected yet';
 
   if (data.expires_at && Number(data.expires_at) <= Date.now()) {
     window.location.replace('/?expired=1');
@@ -94,20 +119,34 @@ async function refresh() {
 
 function connectHapp() {
   const data = state.data;
-  if (!data) return;
+  if (!data || !data.happ_link) {
+    $('encrypt-error').textContent =
+      data && data.encryption_error ? data.encryption_error : 'No Happ link is available yet.';
+    return;
+  }
   $('status-note').textContent =
     'Opening Happ… the web page stays offline; Happ holds the tunnel.';
   window.location.href = data.happ_link;
 }
 
 async function copySub() {
-  await copyText(state.data.subscription_url, $('copy-sub-btn'));
+  const data = state.data;
+  const link = data ? (data.encrypted_links ? data.happ_link : data.subscription_url) : '';
+  await copyText(link, $('copy-sub-btn'));
 }
 
 async function boot() {
   $('connect-btn').addEventListener('click', connectHapp);
   $('copy-sub-btn').addEventListener('click', copySub);
-  $('copy-url-2').addEventListener('click', () => copyText(state.data.subscription_url, $('copy-url-2')));
+  $('copy-url-2').addEventListener('click', () => {
+    const data = state.data;
+    const link = data ? (data.encrypted_links ? data.happ_link : data.subscription_url) : '';
+    copyText(link, $('copy-url-2'));
+  });
+  $('copy-crypt').addEventListener('click', () => {
+    const data = state.data;
+    copyText(data ? data.happ_link : '', $('copy-crypt'));
+  });
   $('copy-config').addEventListener('click', () => copyText(state.data.config, $('copy-config')));
   $('signout-btn').addEventListener('click', async () => {
     try {

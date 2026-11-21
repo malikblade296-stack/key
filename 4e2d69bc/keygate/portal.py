@@ -1,5 +1,9 @@
+import json
 import os
 import re
+import threading
+import urllib.error
+import urllib.request
 import uuid
 from urllib.parse import quote
 
@@ -10,6 +14,10 @@ ACCESS_TTL_MS = 12 * 60 * 60 * 1000
 MAX_HWID_LENGTH = 256
 MAX_KEY_LENGTH = 32
 SUB_BASE_SETTING = 'public_base_url'
+ONLINE_WINDOW_MS = 5 * 60 * 1000
+ENCRYPT_SETTING = 'happ_encrypt_links'
+CRYPTO_API = os.environ.get('HAPP_CRYPTO_API', 'https://crypto.happ.su/api-v2.php')
+CRYPT_LOCK = threading.Lock()
 
 
 class PortalError(Exception):
@@ -50,6 +58,110 @@ def minutes_left(expires_at, now):
     if expires_at is None:
         return None
     return max(0, -(-(int(expires_at) - int(now)) // 60000))
+
+
+def row_value(row, name, default=None):
+    keys = row.keys() if hasattr(row, 'keys') else ()
+    return row[name] if name in keys else default
+
+
+def is_online(row, now):
+    last = row_value(row, 'last_sub_at')
+    if not last:
+        return False
+    return now - int(last) <= ONLINE_WINDOW_MS and key_state(row, now) == 'active'
+
+
+def configured_base(conn):
+    stored = (db.get_setting(conn, SUB_BASE_SETTING) or '').strip().rstrip('/')
+    if stored:
+        return stored
+    return (os.environ.get('PUBLIC_BASE_URL') or '').strip().rstrip('/')
+
+
+def encryption_enabled(conn):
+    return (db.get_setting(conn, ENCRYPT_SETTING) or '0') == '1'
+
+
+def _crypt_cache_key(url):
+    return 'crypt_link:' + security.sha256_hex(url)[:40]
+
+
+def _request_crypt_link(url):
+    payload = json.dumps({'url': url}, separators=(',', ':')).encode('utf-8')
+    request = urllib.request.Request(
+        CRYPTO_API,
+        data=payload,
+        headers={'Content-Type': 'application/json', 'Accept': 'application/json, text/plain'},
+        method='POST',
+    )
+    with urllib.request.urlopen(request, timeout=8) as response:
+        raw = response.read(12000).decode('utf-8', 'replace').strip()
+    link = ''
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        link = raw
+    else:
+        if isinstance(data, str):
+            link = data
+        elif isinstance(data, dict):
+            for name in ('url', 'link', 'encrypted', 'result', 'data'):
+                value = data.get(name)
+                if isinstance(value, str):
+                    link = value
+                    break
+                if isinstance(value, dict):
+                    for inner in ('url', 'link', 'encrypted'):
+                        if isinstance(value.get(inner), str):
+                            link = value[inner]
+                            break
+                if link:
+                    break
+    link = link.strip().strip('"').strip()
+    if not link.startswith('happ://crypt'):
+        raise ValueError('Happ encryption service returned an unexpected response')
+    return link
+
+
+def encrypted_subscription_link(conn, url):
+    cached = db.get_setting(conn, _crypt_cache_key(url))
+    if cached and cached.startswith('happ://crypt'):
+        return cached, None
+    try:
+        with CRYPT_LOCK:
+            cached = db.get_setting(conn, _crypt_cache_key(url))
+            if cached and cached.startswith('happ://crypt'):
+                return cached, None
+            link = _request_crypt_link(url)
+            db.set_setting(conn, _crypt_cache_key(url), link)
+            return link, None
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        return None, 'Happ encryption service unavailable: {}'.format(error)
+
+
+def happ_link(conn, url):
+    if encryption_enabled(conn):
+        link, error = encrypted_subscription_link(conn, url)
+        if link:
+            return link, None
+        return '', error
+    return 'happ://add/' + url, None
+
+
+def expiry_headers(row, now, paused_since=0):
+    expires = maintenance.effective_expiry(
+        row['expires_at'], now, paused_since, row['activated_at']
+    )
+    if expires is None:
+        return {}
+    return {
+        'sub-expire': '1',
+        'subscription-userinfo': 'upload=0; download=0; total=0; expire={}'.format(
+            int(expires // 1000)
+        ),
+    }
+
 
 
 def log_attempt(conn, row, ip, hwid, result, source):
@@ -224,17 +336,12 @@ def vless_uri(conn, key_norm, label=None):
     )
 
 
-def subscription_url(conn, ctx, row, hwid=None):
+def subscription_url(conn, ctx, row):
     base = public_base_url(conn, ctx)
-    url = '{}/sub/{}'.format(base, quote(row['key_display'], safe=''))
-    device = hwid or row['hwid']
-    if row['device_mode'] == 'single' and device:
-        url += '?hwid=' + quote(device, safe='')
-    return url
-
-
-def happ_link(url):
-    return 'happ://add/' + url
+    # The device is bound from the x-hwid header Happ sends on every fetch.
+    # Never bake a HWID into the URL: a shared link must not carry another
+    # device's identity.
+    return '{}/sub/{}'.format(base, quote(row['key_display'], safe=''))
 
 
 def _state_payload(conn, ctx, row, access, now):
@@ -243,8 +350,11 @@ def _state_payload(conn, ctx, row, access, now):
         row['expires_at'], now, paused, row['activated_at']
     )
     device = access['session'].get('hwid') or row['hwid']
-    sub_url = subscription_url(conn, ctx, row, device)
+    sub_url = subscription_url(conn, ctx, row)
     cfg = proxy_config(conn)
+    encrypted = encryption_enabled(conn)
+    link, encryption_error = happ_link(conn, sub_url)
+    online = is_online(row, now)
     return {
         'authenticated': True,
         'key': _mask(row['key_display']),
@@ -258,11 +368,16 @@ def _state_payload(conn, ctx, row, access, now):
         'timer_paused': bool(paused),
         'maintenance_on': maintenance.is_on(conn),
         'maintenance_message': maintenance.message(conn),
-        'subscription_url': sub_url,
-        'happ_link': happ_link(sub_url),
-        'config': vless_uri(conn, row['key_norm']),
+        'subscription_url': '' if encrypted else sub_url,
+        'encrypted_links': encrypted,
+        'encryption_error': encryption_error,
+        'happ_link': link,
+        'config': '' if encrypted else vless_uri(conn, row['key_norm']),
         'proxy_mode': cfg['mode'],
-        'web_proxy': 'offline',
+        'web_online': online,
+        'last_sub_at': row_value(row, 'last_sub_at'),
+        'online_window_minutes': ONLINE_WINDOW_MS // 60000,
+        'web_proxy': 'online' if online else 'offline',
         'local_proxy_hint': (
             'python scripts/dev_proxy.py 8899  (then set your browser HTTP proxy to '
             '127.0.0.1:8899)'
@@ -405,38 +520,46 @@ def logout_portal(ctx):
 def subscription(conn, raw_key, params, ip, user_agent, headers=None):
     """Happ fetches this URL on every refresh. Errors invalidate the profile."""
     now = security.now_ms()
+    paused = maintenance.paused_at(conn)
+    request_headers = headers or {}
     allowed, _ = security.take_rate('sub:{}'.format(ip), 120, 60)
     if not allowed:
-        return 429, {}, 'Too many requests.'
+        return 429, {'Content-Type': 'text/plain; charset=utf-8'}, 'Too many requests.'
     if maintenance.block_resellers(conn):
-        return 503, {}, maintenance.message(conn)
+        return 503, {'Content-Type': 'text/plain; charset=utf-8'}, maintenance.message(conn)
     row = _find_key(conn, raw_key)
     raw_hwid = params.get('hwid')
     hwid = raw_hwid.strip() if isinstance(raw_hwid, str) else ''
-    if not hwid and headers is not None:
+    if not hwid:
         for name in ('x-hwid', 'x-device-id', 'x-hwid-id'):
-            value = headers.get(name)
+            value = request_headers.get(name)
             if isinstance(value, str) and value.strip():
                 hwid = value.strip()[:MAX_HWID_LENGTH + 1]
                 break
+    common = {'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store'}
     if len(hwid) > MAX_HWID_LENGTH:
         log_attempt(conn, row, ip, '', 'invalid_hwid', 'sub')
-        return 400, {}, 'Invalid device id.'
+        return 400, common, 'Invalid device id.'
     ban = banned(conn, ip, hwid)
     if ban:
         log_attempt(conn, row, ip, hwid, 'banned_' + ban, 'sub')
-        return 403, {}, 'Access blocked.'
+        return 403, common, 'Access blocked.'
     if row is None:
         log_attempt(conn, None, ip, hwid, 'invalid_key', 'sub')
-        return 404, {}, 'Unknown key.'
-    state = key_state(row, now, maintenance.paused_at(conn))
+        return 404, common, 'Unknown key.'
+    state = key_state(row, now, paused)
     if state in ('revoked', 'suspended', 'expired'):
         log_attempt(conn, row, ip, hwid, state, 'sub')
-        return 410 if state == 'expired' else 403, {}, 'Key is no longer valid.'
+        response = dict(common)
+        response.update(expiry_headers(row, now, paused))
+        return (410 if state == 'expired' else 403), response, 'Key is no longer valid.'
     if row['device_mode'] == 'single':
         if hwid and row['hwid'] and row['hwid'] != hwid:
             log_attempt(conn, row, ip, hwid, 'device_mismatch', 'sub')
-            return 403, {}, 'Device does not match this key.'
+            response = dict(common)
+            response['x-hwid-max-devices-reached'] = '1'
+            response['x-hwid-limit'] = '1'
+            return 403, response, 'This key is already locked to another device.'
 
     activated_at = row['activated_at']
     expires_at = row['expires_at']
@@ -450,13 +573,13 @@ def subscription(conn, raw_key, params, ip, user_agent, headers=None):
         new_hwid = hwid or None
     conn.execute(
         'UPDATE keys SET hwid = ?, activated_at = ?, expires_at = ?, last_verified_at = ?, '
-        'verify_count = verify_count + 1 WHERE id = ?',
-        (new_hwid, activated_at, expires_at, now, row['id']),
+        'last_sub_at = ?, verify_count = verify_count + 1 WHERE id = ?',
+        (new_hwid, activated_at, expires_at, now, now, row['id']),
     )
     log_attempt(conn, row, ip, new_hwid or hwid, 'valid', 'sub')
 
     projected_expires = maintenance.effective_expiry(
-        expires_at, now, maintenance.paused_at(conn), activated_at
+        expires_at, now, paused, activated_at
     )
     config = vless_uri(conn, row['key_norm'])
     lines = [
@@ -464,6 +587,7 @@ def subscription(conn, raw_key, params, ip, user_agent, headers=None):
         '#profile-update-interval: 1',
         '#subscription-always-hwid-enable: 1',
         '#sub-expire: 1',
+        '#notification-subs-expire: 1',
     ]
     if projected_expires:
         lines.append(
@@ -472,18 +596,31 @@ def subscription(conn, raw_key, params, ip, user_agent, headers=None):
             )
         )
     lines.append(config)
-    headers = {
+    base = configured_base(conn)
+    response_headers = {
         'Content-Type': 'text/plain; charset=utf-8',
         'Cache-Control': 'no-store',
         'profile-title': 'INRI H4X',
         'profile-update-interval': '1',
+        'subscription-always-hwid-enable': '1',
+        'notification-subs-expire': '1',
         'sub-expire': '1',
     }
+    if base:
+        response_headers['profile-web-page-url'] = base
+        response_headers['sub-expire-button-link'] = base + '/'
     if projected_expires:
-        headers['subscription-userinfo'] = 'upload=0; download=0; total=0; expire={}'.format(
-            int(projected_expires // 1000)
+        response_headers['subscription-userinfo'] = (
+            'upload=0; download=0; total=0; expire={}'.format(
+                int(projected_expires // 1000)
+            )
         )
-    return 200, headers, '\n'.join(lines) + '\n'
+    if encryption_enabled(conn):
+        # Hide the URL and the server configs inside Happ for forced-encryption mode.
+        response_headers['hide-url'] = '1'
+        response_headers['hide-settings'] = '1'
+    return 200, response_headers, '\n'.join(lines) + '\n'
+
 
 
 def admin_proxy_state(conn):
@@ -497,6 +634,7 @@ def admin_proxy_state(conn):
         'path': db.get_setting(conn, 'happ_path') or '/inri',
         'remark': db.get_setting(conn, 'happ_remark') or 'INRI H4X',
         'public_base_url': db.get_setting(conn, SUB_BASE_SETTING) or '',
+        'encrypt_links': encryption_enabled(conn),
         'test_config': vless_uri(conn, 'test'),
         'local_proxy_hint': (
             'For the local web-proxy test run: python scripts/dev_proxy.py 8899 '

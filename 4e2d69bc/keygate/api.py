@@ -472,11 +472,13 @@ def serialize_key(row, now=None, paused_since=0):
     expires_at = maintenance.effective_expiry(
         row['expires_at'], now, paused_since, row['activated_at']
     )
+    state = key_state(row, now, paused_since)
+    last_sub_at = portal.row_value(row, 'last_sub_at')
     return {
         'id': row['id'],
         'key': row['key_display'],
         'status': row['status'],
-        'state': key_state(row, now, paused_since),
+        'state': state,
         'device_mode': row['device_mode'],
         'duration_minutes': row['duration_minutes'],
         'price_cents': row['price_cents'] if 'price_cents' in keys else 0,
@@ -484,6 +486,10 @@ def serialize_key(row, now=None, paused_since=0):
         'activated_at': row['activated_at'],
         'expires_at': expires_at,
         'last_verified_at': row['last_verified_at'],
+        'last_sub_at': last_sub_at,
+        'online': bool(last_sub_at)
+        and state == 'active'
+        and now - int(last_sub_at) <= portal.ONLINE_WINDOW_MS,
         'verify_count': row['verify_count'],
         'created_at': row['created_at'],
         'created_by_role': row['created_by_role'],
@@ -1227,6 +1233,9 @@ def admin_proxy_save(ctx):
     base = (body.get('public_base_url') or '').strip().rstrip('/')
     if base and not re.fullmatch(r'https?://[^\s]+', base):
         raise ApiError(400, 'Public base URL must start with http:// or https://.')
+    encrypt_links = body.get('encrypt_links')
+    if encrypt_links is not None and not isinstance(encrypt_links, bool):
+        raise ApiError(400, 'Encrypted links must be true or false.')
     db.set_setting(conn, 'happ_mode', mode)
     db.set_setting(conn, 'happ_host', host)
     db.set_setting(conn, 'happ_port', str(port))
@@ -1235,6 +1244,8 @@ def admin_proxy_save(ctx):
     db.set_setting(conn, 'happ_path', path)
     db.set_setting(conn, 'happ_remark', remark)
     db.set_setting(conn, portal.SUB_BASE_SETTING, base)
+    if encrypt_links is not None:
+        db.set_setting(conn, portal.ENCRYPT_SETTING, '1' if encrypt_links else '0')
     return portal.admin_proxy_state(conn)
 
 

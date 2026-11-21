@@ -656,6 +656,13 @@
                     <input id="proxy-base" autocomplete="off" spellcheck="false" placeholder="https://your-domain.example">
                     <small class="hint">Used to build subscription links. Leave empty to use the current request host.</small>
                   </label>
+                  <label class="auth-option">
+                    <input type="checkbox" id="proxy-encrypt">
+                    <span class="auth-option-body">
+                      <strong>Force encrypted Happ links</strong>
+                      <small>The website shows only a <code>happ://crypt</code> link and hides the subscription URL and server configs. Inside Happ the user cannot view, edit or share them. Uses Happ's official encryption service; turn off to show a normal subscription link again.</small>
+                    </span>
+                  </label>
                   <button class="btn btn-primary" type="submit" id="proxy-save-btn">Save proxy</button>
                   <p class="form-error" id="proxy-error" role="alert"></p>
                 </div>
@@ -674,7 +681,7 @@
             <div class="panel-inner">
               <pre class="integration-code" id="proxy-test">—</pre>
               <p class="small muted" id="proxy-hint"></p>
-              <p class="small muted">Subscriptions are served at <code>/sub/&lt;key&gt;</code>. Single-device keys use <code>?hwid=&lt;device-id&gt;</code>; expired or revoked keys make Happ's refresh fail, so the profile drops out of use until a new key is issued.</p>
+              <p class="small muted">Subscriptions are served at <code>/sub/&lt;key&gt;</code>. Happ sends its device ID on every refresh, so a single-device key locks to the first phone and refuses any other one. The remaining time is sent to Happ as <code>subscription-userinfo expire</code>; once it runs out the refresh fails and the profile stops working. A key that refreshed in the last 5 minutes shows <strong>WEB ONLINE</strong> on its row.</p>
             </div>
           </section>
         </div>

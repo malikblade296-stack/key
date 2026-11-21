@@ -12,6 +12,14 @@
 </head>
 <body>
   <div class="bg-grid" aria-hidden="true"></div>
+  <div class="aura-bg" id="aura-bg" aria-hidden="true">
+    <div class="aura-image"></div>
+    <video class="aura-video" id="aura-video" autoplay muted loop playsinline preload="auto" poster="/static/aura-poster.png">
+      <source src="/static/aura-video.mp4" type="video/mp4">
+    </video>
+    <div class="aura-glow"></div>
+    <div class="aura-veil"></div>
+  </div>
 
   <header class="site-header">
     <a class="brand" href="/" aria-label="INRI Proxy home">
@@ -48,7 +56,14 @@
 
   <footer class="site-footer">
     <span>INRI Proxy — private proxy access</span>
-    <span class="status"><span class="status-dot" id="api-dot"></span><span id="api-status">Checking…</span></span>
+    <div class="footer-side">
+      <button class="phonk-toggle" id="phonk-toggle" type="button" aria-pressed="false">
+        <span class="phonk-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span id="phonk-label">Phonk · off</span>
+      </button>
+      <span class="status"><span class="status-dot" id="api-dot"></span><span id="api-status">Checking…</span></span>
+    </div>
   </footer>
+  <audio id="phonk-audio" preload="none"></audio>
 </body>
 </html>

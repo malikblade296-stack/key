@@ -1909,3 +1909,206 @@ pre.integration-code {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- activation aura background ---------- */
+
+.aura-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #03060d;
+}
+
+.aura-image {
+  position: absolute;
+  inset: -8%;
+  background: url("/static/aura-poster.png") 68% 55% / cover no-repeat;
+  filter: saturate(1.15) brightness(0.66) contrast(1.05);
+  transform-origin: 72% 60%;
+  animation: aura-drift 28s ease-in-out infinite alternate;
+}
+
+.aura-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(55% 50% at 74% 58%, rgba(59, 130, 246, 0.32), transparent 62%),
+    radial-gradient(38% 34% at 86% 28%, rgba(34, 211, 238, 0.22), transparent 70%),
+    radial-gradient(30% 30% at 58% 78%, rgba(37, 99, 235, 0.2), transparent 72%);
+  mix-blend-mode: screen;
+  animation: aura-pulse 9s ease-in-out infinite;
+}
+
+.aura-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(3, 6, 13, 0.95) 0%, rgba(3, 6, 13, 0.82) 34%, rgba(3, 6, 13, 0.45) 62%, rgba(3, 6, 13, 0.62) 100%),
+    linear-gradient(180deg, rgba(3, 6, 13, 0.55), transparent 26%, transparent 72%, rgba(3, 6, 13, 0.9));
+}
+
+@keyframes aura-drift {
+  from { transform: scale(1.06) translate3d(0, 0, 0); }
+  to { transform: scale(1.14) translate3d(-2.5%, -1.8%, 0); }
+}
+
+@keyframes aura-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+}
+
+@media (max-width: 767px) {
+  .aura-image {
+    background-position: 74% 45%;
+    filter: saturate(1.1) brightness(0.55);
+  }
+  .aura-veil {
+    background: linear-gradient(180deg, rgba(3, 6, 13, 0.8), rgba(3, 6, 13, 0.6) 35%, rgba(3, 6, 13, 0.92));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-image,
+  .aura-glow {
+    animation: none;
+  }
+}
+
+/* ---------- live state + encrypted note ---------- */
+
+.state-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  border-radius: 999px;
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--ok);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
+.live-chip::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.encrypted-note {
+  padding: 14px 16px;
+  border: 1px dashed rgba(94, 234, 212, 0.35);
+  border-radius: 12px;
+  background: rgba(94, 234, 212, 0.05);
+}
+
+.encrypted-note .eyebrow {
+  margin-bottom: 6px;
+}
+
+.encrypted-note .btn {
+  margin-top: 10px;
+}
+
+/* ---------- activation video + phonk playlist ---------- */
+
+.aura-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.12) brightness(0.62) contrast(1.05);
+  opacity: 0.92;
+}
+
+.footer-side {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.phonk-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.phonk-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.phonk-toggle[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: rgba(94, 234, 212, 0.55);
+  background: rgba(94, 234, 212, 0.08);
+}
+
+.phonk-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+}
+
+.phonk-bars i {
+  width: 2px;
+  height: 4px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.phonk-toggle[aria-pressed="true"] .phonk-bars i {
+  animation: phonk-bar 0.9s ease-in-out infinite;
+}
+
+.phonk-toggle[aria-pressed="true"] .phonk-bars i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.phonk-toggle[aria-pressed="true"] .phonk-bars i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes phonk-bar {
+  0%, 100% { height: 3px; }
+  50% { height: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-video {
+    display: none;
+  }
+  .phonk-toggle[aria-pressed="true"] .phonk-bars i {
+    animation: none;
+    height: 6px;
+  }
+}

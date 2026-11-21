@@ -108,18 +108,22 @@ function renderKeys() {
     const lastCheck = key.last_verified_at
       ? `Last check: ${esc(fmtDateTime(key.last_verified_at))}`
       : 'Never verified';
+    const lastSub = key.last_sub_at
+      ? `Happ refresh: ${esc(fmtDateTime(key.last_sub_at))}`
+      : 'Happ has not connected yet';
+    const liveChip = key.online ? '<span class="live-chip">WEB ONLINE</span>' : '';
     const expires = key.expires_at
       ? fmtDateTime(key.expires_at)
       : (key.duration_minutes === null ? 'Never' : '—');
     return `<tr>
       <td><div class="key-cell"><code>${esc(key.key)}</code><button type="button" class="copy-btn" data-copy="${esc(key.key)}">Copy</button></div></td>
-      <td>${badge(key.state)}</td>
+      <td><div class="state-cell">${badge(key.state)}${liveChip}</div></td>
       <td>${key.device_mode === 'single' ? 'Single' : 'Unlimited'}</td>
       <td>${fmtDuration(key.duration_minutes)}</td>
       <td>${device}</td>
       <td>${fmtDateTime(key.activated_at)}</td>
       <td>${expires}</td>
-      <td><span title="${lastCheck}">${Number(key.verify_count || 0).toLocaleString()}</span></td>
+      <td><span title="${lastCheck} · ${lastSub}">${Number(key.verify_count || 0).toLocaleString()}</span></td>
       <td><div class="origin"><span>${esc(key.created_by)}</span><small>${fmtDateTime(key.created_at)}</small></div></td>
       <td>${actionsFor(key)}</td>
     </tr>`;
@@ -418,6 +422,7 @@ function renderProxy(data) {
   $('proxy-path').value = data.path || '/inri';
   $('proxy-remark').value = data.remark || 'INRI H4X';
   $('proxy-base').value = data.public_base_url || '';
+  $('proxy-encrypt').checked = Boolean(data.encrypt_links);
   $('proxy-test').textContent = data.test_config || '—';
   $('copy-proxy-test').dataset.copy = data.test_config || '';
   $('proxy-hint').textContent = data.local_proxy_hint || '';
@@ -1026,6 +1031,7 @@ function initEvents() {
           path: $('proxy-path').value.trim(),
           remark: $('proxy-remark').value.trim(),
           public_base_url: $('proxy-base').value.trim(),
+          encrypt_links: $('proxy-encrypt').checked,
         },
       });
       renderProxy(data);
