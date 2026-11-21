@@ -78,6 +78,7 @@ ROUTES = [
     Route('POST', '/api/portal/app-ticket', lambda ctx: portal.create_app_ticket(ctx)),
     Route('POST', '/api/app/authorize', lambda ctx: portal.authorize_app(ctx)),
     Route('GET', '/api/app/status', lambda ctx: portal.app_ticket_status(ctx)),
+    Route('POST', '/api/sensi/recommend', lambda ctx: sensi_recommend(ctx)),
 
     Route('GET', '/api/reseller/me', lambda ctx: reseller_me(ctx), role='reseller'),
     Route('GET', '/api/reseller/keys', lambda ctx: reseller_keys(ctx), role='reseller'),
@@ -1730,3 +1731,109 @@ def verify_key(ctx):
         ),
         'server_time': now,
     }
+
+
+def _sensi_number(value, default, low, high):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = default
+    return max(low, min(high, number))
+
+
+def _sensi_tier(ram, cores, refresh, inches, sdk, model):
+    score = 0.0
+    if ram >= 8:
+        score += 2.0
+    elif ram >= 6:
+        score += 1.5
+    elif ram >= 4:
+        score += 1.0
+    elif ram >= 3:
+        score += 0.5
+    if refresh >= 120:
+        score += 1.5
+    elif refresh >= 90:
+        score += 1.0
+    if cores >= 8:
+        score += 0.5
+    if sdk >= 33:
+        score += 0.5
+    if inches >= 6.7:
+        score += 0.5
+    if 'pro' in model or 'ultra' in model:
+        score += 0.5
+    if 'lite' in model or ' go' in model:
+        score -= 0.5
+    if score >= 4.5:
+        return 4
+    if score >= 3.0:
+        return 3
+    if score >= 1.5:
+        return 2
+    return 1
+
+
+def sensi_recommend(ctx):
+    allowed, retry = security.take_rate('sensi:{}'.format(ctx['ip']), 40, 60)
+    if not allowed:
+        raise ApiError(429, 'Too many requests. Try again in {} seconds.'.format(retry))
+
+    body = ctx['body']
+    model_raw = body.get('model')
+    model = model_raw.strip().lower()[:48] if isinstance(model_raw, str) else ''
+    ram = _sensi_number(body.get('ram_gb'), 4, 1, 24)
+    cores = int(_sensi_number(body.get('cores'), 8, 1, 16))
+    refresh = int(_sensi_number(body.get('refresh_hz'), 60, 30, 240))
+    inches = _sensi_number(body.get('inches'), 6.4, 3, 15)
+    sdk = int(_sensi_number(body.get('sdk'), 30, 21, 60))
+
+    tier = _sensi_tier(ram, cores, refresh, inches, sdk, model)
+    bases = {
+        1: (92, 88, 80, 68, 52, 64),
+        2: (95, 90, 82, 70, 55, 66),
+        3: (98, 93, 85, 73, 58, 68),
+        4: (100, 95, 88, 76, 60, 70),
+    }
+    general, red_dot, two_x, four_x, awm, free_look = bases[tier]
+    if refresh >= 120:
+        general += 1
+        red_dot += 1
+        two_x += 1
+    if inches >= 6.8:
+        general -= 1
+        two_x -= 1
+        four_x -= 1
+    if inches < 6.0:
+        two_x += 1
+        four_x += 1
+
+    def clamp(value, low, high):
+        return max(low, min(high, value))
+
+    precision = clamp(55 + (tier - 1) * 4 + (4 if inches < 6.3 else 0)
+                      - (2 if refresh >= 120 else 0), 45, 72)
+    notes = [
+        'Graphics: Smooth + High FPS',
+        'Refresh rate: {} Hz'.format(refresh),
+        'Close background apps before every match',
+        'Disable battery saver and power saving',
+        'Fire button 60%, HUD scale 100%',
+        'Aim precision ON, quick weapon switch ON',
+        'Keep at least {} GB storage free'.format(max(2, int(round(ram / 4)))),
+    ]
+    return {
+        'ok': True,
+        'source': 'inri-ai-v1',
+        'tier': tier,
+        'aim_style': 'precision' if inches < 6.3 else 'balanced' if inches < 6.8 else 'speed',
+        'general': clamp(general, 70, 100),
+        'red_dot': clamp(red_dot, 65, 100),
+        'scope_2x': clamp(two_x, 55, 95),
+        'scope_4x': clamp(four_x, 45, 90),
+        'awm': clamp(awm, 35, 80),
+        'free_look': clamp(free_look, 40, 90),
+        'aim_precision': precision,
+        'notes': notes,
+    }
+
